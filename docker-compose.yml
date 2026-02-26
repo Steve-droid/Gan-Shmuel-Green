@@ -1,0 +1,11 @@
+services:
+  ci:
+    build: ./ci
+    ports:
+      - "8085:8085"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/repo
+    environment:
+      - REPO_DIR=/repo
+    restart: unless-stopped
