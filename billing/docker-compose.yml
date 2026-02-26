@@ -1,0 +1,28 @@
+version : '3.8'
+
+services:
+  billing-app:
+    build: .
+    ports:
+      - "5001:5001"
+    depends_on:
+      billing-db:
+        condition: service_healthy
+    environment:
+      DB_HOST: billing-db
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: billdb
+
+  billing-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: billdb
+    volumes:
+      - ./db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
