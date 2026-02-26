@@ -454,3 +454,31 @@ So `/app` and `/repo/ci/` are in sync **after** a successful pipeline run, but d
 ### Does the `ci` container create the other containers?
 
 Yes. The `ci` container runs on the EC2 server and uses the Docker socket to build and start the `weight` and `billing` containers on the same host. It never runs Docker itself — it just sends commands to the host's Docker daemon through the mounted socket.
+
+---
+
+# Deploying to EC2
+
+## Why does `ssh green` work?
+
+Earlier you configured `~/.ssh/config` with:
+
+```
+Host green
+  HostName 3.108.241.170
+  User ubuntu
+  IdentityFile ~/.ssh/green-key
+```
+
+`green` is just an alias. When you type `ssh green`, your SSH client looks up `green` in `~/.ssh/config` and expands it to:
+```bash
+ssh -i ~/.ssh/green-key ubuntu@3.108.241.170
+```
+
+## Who is the client and who is the server for `curl http://localhost:8085/health`?
+
+This command runs **on the EC2 server** (after you SSH in):
+- **Client:** `curl`, running on the EC2 server
+- **Server:** The CI Flask container, also running on the EC2 server
+
+Both are on the same machine. `localhost` refers to the EC2 server itself — `curl` is just checking that the container started correctly and is listening on port 8085.
