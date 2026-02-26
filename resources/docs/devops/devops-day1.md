@@ -397,3 +397,60 @@ The format is `host_path:container_path`:
 - `/repo` — where that directory will appear inside the container
 
 It connects to `REPO_DIR=/repo` in the environment variables — that's how `app.py` knows where to find the repo. The two must match: if you changed `/repo` to `/project` in the volume, you'd also need to change `REPO_DIR=/project`.
+
+---
+
+## Q&A: Testing the CI Service
+
+### Why are there two directories `/app` and `/repo` inside the container?
+
+They serve different purposes:
+
+- `/app` — created by the `Dockerfile`. This is where the **CI service's own code** lives (`app.py`, etc.). It's baked into the image at build time via `COPY`.
+- `/repo` — created by the volume mount in `docker-compose.yml`. This is where the **project repo** is mounted from the host at runtime.
+
+Inside the container the structure looks like this:
+```
+/
+├── app/          ← CI service code (app.py, requirements.txt)
+├── repo/         ← the entire gan-shmuel repo, mounted from the host
+│   ├── ci/
+│   ├── billing/
+│   ├── weight/
+│   └── docker-compose.yml
+└── ...           ← standard Linux filesystem
+```
+
+### What is the `dubious ownership` error?
+
+```
+fatal: detected dubious ownership in repository at '/repo'
+```
+
+Git is refusing to run because `/repo` is owned by a different user than the one running inside the container. This is a Git security feature introduced in Git 2.35.2 to prevent attacks where a malicious repo is injected via a shared directory.
+
+The fix is to add this to the `Dockerfile`:
+```dockerfile
+RUN git config --global --add safe.directory /repo
+```
+
+This tells Git: "I trust `/repo` even if the ownership doesn't match."
+
+### Why is `/app` separated from `/repo/ci/`? What is stored under `/repo/ci/`?
+
+`/repo/ci/` contains the same files as `/app` (`app.py`, `Dockerfile`, `requirements.txt`) — but they serve different roles:
+
+- `/app` — a snapshot of the CI code **baked into the image** at build time via `COPY app.py .` in the Dockerfile. Set once when the image was built.
+- `/repo/ci/` — the **live version** of those same files from the mounted repo on the host, updated every time `git pull` runs.
+
+The reason they're separate is timing:
+- `/app` is fixed at image build time
+- `/repo` reflects the current state of the repo on disk
+
+The pipeline runs `git pull` to update `/repo`, then `docker compose build` to rebuild the image (which re-copies the updated files into a new `/app`), then `docker compose up -d` to start a new container with the updated image.
+
+So `/app` and `/repo/ci/` are in sync **after** a successful pipeline run, but during the pipeline they can briefly differ.
+
+### Does the `ci` container create the other containers?
+
+Yes. The `ci` container runs on the EC2 server and uses the Docker socket to build and start the `weight` and `billing` containers on the same host. It never runs Docker itself — it just sends commands to the host's Docker daemon through the mounted socket.

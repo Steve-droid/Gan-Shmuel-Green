@@ -5,6 +5,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+RUN git config --global --add safe.directory /repo
+RUN git config --global pull.ff only
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
