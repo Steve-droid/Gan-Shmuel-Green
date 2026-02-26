@@ -116,10 +116,10 @@ def post_weight():
         return jsonify({"error": "out followed by out requires force=true"}), 400
 
 
-
+    
     # TODO: Implement logic
-    # - Validate direction (in/out/none) - done
-    # - Check session constraints (in/in, out/out, out without in) - done
+    # - Validate direction (in/out/none) 
+    # - Check session constraints (in/in, out/out, out without in)
     # - Generate/return session id
     # - Store in `transactions` table
     
