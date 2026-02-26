@@ -9,7 +9,7 @@ def health():
         con = get_db_connection()
         cursor = con.cursor()
         cursor.execute("SELECT 1")
-        con.close
+        con.close()
         return "OK", 200
     except Exception:
         return "Failure", 500
