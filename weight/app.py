@@ -31,17 +31,48 @@ def post_weight():
 
 @app.get('/weight')
 def get_weights():
-    """Query weights with filters"""
-    from_dt = request.args.get('from')  # yyyymmddhhmmss
-    to_dt = request.args.get('to')      # yyyymmddhhmmss
-    filter_dir = request.args.get('filter', 'in,out,none')
+    # 1. Prepare default time values 
+    # We use these if the user doesn't provide "from" or "to" in the URL
+    now_str = datetime.now().strftime('%Y%m%d%H%M%S')
+    today_midnight = datetime.now().strftime('%Y%m%d000000')
+
+    # 2. Extract parameters from the URL 
+    t1 = request.args.get("from", today_midnight)
+    t2 = request.args.get("to", now_str)
+    f = request.args.get("filter", "in,out,none")
     
-    # TODO: Implement logic
-    # - Query `transactions` table for weights in date range
-    # - Filter by direction
-    # - Return array of weight records
+    # 3. Process the filter string into a list 
+    # Example: "in,out" becomes ["in", "out"]
+    f_list = f.split(',')
     
-    return jsonify([]), 200
+    # 4. Define the SQL search query 
+    # We use %s placeholders to safely pass our Python variables to SQL
+    query = "SELECT id, truck, bruto, truckTara, neto, datetime FROM transactions WHERE datetime BETWEEN %s AND %s AND direction IN %s"
+    params = (t1, t2, tuple(f_list))
+
+    # 5. Execute the query and handle potential errors 
+    try:
+        cursor.execute(query, params)
+        rows = cursor.fetchall()  # Fetch all matching records
+    except Exception as e:
+        # If the database fails, return a 500 error instead of crashing
+        return jsonify({"error": "Database connection failed"}), 500
+    
+    # 6. Transform raw database rows into a list of dictionaries 
+    results = []
+    for row in rows:
+        record = {
+            "id": row[0],
+            "truck": row[1],
+            "bruto": row[2],
+            "truckTara": row[3] or 0,  # Use 0 if the value is NULL/None
+            "neto": row[4] or 0,       # Use 0 if the truck hasn't left yet
+            "datetime": row[5]
+        }
+        results.append(record)
+
+    # 7. Send the final JSON response to the user 📤
+    return jsonify(results), 200
 
 
 @app.get('/session/<session_id>')
