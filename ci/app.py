@@ -37,6 +37,9 @@ def health():
 
 @app.route('/trigger', methods=['POST'])
 def trigger():
+    event = request.headers.get('X-GitHub-Event', '')
+    if event != 'push':
+        return jsonify({"status": "ignored", "reason": f"event '{event}' is not a push"}), 200
     payload = request.get_json(silent=True) or {}
     ref = payload.get('ref', 'refs/heads/main')
     branch = ref.split('/')[-1]

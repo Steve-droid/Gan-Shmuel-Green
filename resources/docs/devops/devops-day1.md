@@ -482,3 +482,129 @@ This command runs **on the EC2 server** (after you SSH in):
 - **Server:** The CI Flask container, also running on the EC2 server
 
 Both are on the same machine. `localhost` refers to the EC2 server itself — `curl` is just checking that the container started correctly and is listening on port 8085.
+
+---
+
+# Testing on EC2 — Bugs Found and Fixes
+
+## The port architecture
+
+The EC2 server is a physical machine at `3.108.241.170` with ports 8080–8090 open. Docker containers run **on the host**, not nested inside each other. The port mapping format is `HOST_PORT:CONTAINER_PORT`:
+
+```
+EC2 Host (3.108.241.170)
+├── gan-shmuel-green-ci-1    ← port 8085 on HOST → 8085 inside this container
+│                              (the running CI service, started manually)
+│
+├── (future) billing-1       ← will bind e.g. 8081 on HOST
+└── (future) weight-1        ← will bind e.g. 8080 on HOST
+```
+
+All containers are siblings on the host. None are nested inside another. When the CI container runs `docker compose up -d`, it sends commands through the Docker socket to the **host's Docker daemon**, which creates the new containers **on the host** — not inside the CI container.
+
+---
+
+## Bug 1: Port conflict on `docker compose up -d`
+
+**Error seen in logs:**
+```
+Bind for :::8085 failed: port is already allocated
+```
+
+**Root cause:** `docker compose up -d` (with no service names) starts *all* services in the file, including `ci`. The host Docker daemon tries to create a new `ci` container (`repo-ci-1`) and bind it to host port 8085 — but that port is already taken by the currently running `gan-shmuel-green-ci-1`.
+
+The CI service is infrastructure. It should never be restarted by its own pipeline. The pipeline's `docker compose up -d` should only deploy the *application* services — `billing` and `weight`.
+
+**Fix:** Pass service names explicitly and add `--no-deps`:
+
+```python
+['docker', 'compose', 'up', '-d', '--no-deps', 'billing', 'weight']
+```
+
+- **`billing weight`** — only start those services, skipping `ci`
+- **`--no-deps`** — don't also start services they `depends_on:` (prevents surprises as the compose file grows)
+
+---
+
+## Bug 2: `git pull` fails on diverged branches
+
+**Error seen in logs:**
+```
+fatal: Not possible to fast-forward, aborting.
+```
+
+**Root cause:** `git pull origin <branch>` means "merge `origin/<branch>` INTO whatever branch I'm currently on." The EC2 repo was checked out to `devops-deploy-ec2`, but a webhook fired for `main`. Those branches have diverged, and `pull.ff only` (set in the Dockerfile) forbids merges. So the pull aborts.
+
+This also reveals a design issue: `git pull` is the wrong tool for CI. CI doesn't want to *merge* anything — it wants to *deploy exactly what was pushed*.
+
+**Fix:** Replace `git pull` with a fetch + checkout + hard reset:
+
+```python
+['git', 'fetch', 'origin', branch],
+['git', 'checkout', branch],
+['git', 'reset', '--hard', f'origin/{branch}'],
+```
+
+- `git fetch origin branch` — downloads the latest state of that branch from GitHub into the local tracking ref (`origin/<branch>`). Does not touch the working tree.
+- `git checkout branch` — switches the working tree to that branch.
+- `git reset --hard origin/branch` — moves the local branch pointer to match `origin/<branch>` exactly and discards all local changes. Purely local — never touches the remote or any other branch.
+
+This pattern is safe, predictable, and immune to diverged history.
+
+---
+
+## Updated `run_pipeline()` in `app.py`
+
+```python
+def run_pipeline(branch):
+    commands = [
+        ['git', 'fetch', 'origin', branch],
+        ['git', 'checkout', branch],
+        ['git', 'reset', '--hard', f'origin/{branch}'],
+        ['docker', 'compose', 'build'],
+        ['docker', 'compose', 'up', '-d', '--no-deps', 'billing', 'weight'],
+    ]
+
+    for cmd in commands:
+        result = subprocess.run(cmd, cwd=REPO_DIR, capture_output=True, text=True)
+        logging.info(f"{' '.join(cmd)}: {result.stdout.strip()}")
+        if result.returncode != 0:
+            logging.error(f"Failed: {result.stderr.strip()}")
+            return
+    logging.info("Pipeline finished successfully")
+```
+
+The structure of the function is unchanged — the only differences are the git commands (fetch + checkout + reset instead of pull) and the explicit service names on `up -d`.
+
+---
+
+## Bug 3: GitHub ping event triggers the pipeline
+
+**What happened:** After adding the webhook on GitHub, it immediately sends a **ping** event to verify the URL is reachable. Our `/trigger` route had no event-type check, so the ping was treated as a push. The pipeline ran, defaulted to `main` (since the ping payload has no `ref` field), ran `git checkout main` + `git reset --hard origin/main`, and switched the EC2 repo to `main` — which has no `docker-compose.yml`. This broke all subsequent `docker compose` commands on EC2.
+
+**How GitHub signals event type:** Every webhook request includes an `X-GitHub-Event` HTTP header. For a push it is `push`. For the initial verification it is `ping`. For other events (PR opened, branch deleted, etc.) it has its own value. Our code was not reading this header at all.
+
+**Fix:** Check the header at the very top of `/trigger` and ignore anything that isn't a `push`:
+
+```python
+@app.route('/trigger', methods=['POST'])
+def trigger():
+    event = request.headers.get('X-GitHub-Event', '')
+    if event != 'push':
+        return jsonify({"status": "ignored", "reason": f"event '{event}' is not a push"}), 200
+
+    payload = request.get_json(silent=True) or {}
+    ref = payload.get('ref', 'refs/heads/main')
+    branch = ref.split('/')[-1]
+
+    if payload.get('action') == 'deleted':
+        return jsonify({"status": "ignored", "reason": "branch deleted"}), 200
+
+    thread = threading.Thread(target=run_pipeline, args=(branch,), daemon=True)
+    thread.start()
+    return jsonify({"status": "triggered", "branch": branch}), 200
+```
+
+The event check is the first thing in the function — pings and all other non-push events are rejected before any payload parsing or pipeline execution happens.
+
+**`request.headers.get('X-GitHub-Event', '')`** — reads the `X-GitHub-Event` header from the incoming HTTP request. `request.headers` is a dict-like object Flask populates from the raw HTTP headers. The second argument `''` is the default if the header is absent. An empty string will not equal `'push'`, so requests with no event header are also safely ignored.
