@@ -15,9 +15,11 @@ REPO_DIR = os.environ.get('REPO_DIR', '/repo')
 
 def run_pipeline(branch):
     commands = [
-        ['git', 'pull', 'origin', branch],
+        ['git', 'fetch', 'origin', branch],
+        ['git', 'checkout', branch],
+        ['git', 'reset', '--hard', f'origin/{branch}'],
         ['docker', 'compose', 'build'],
-        ['docker', 'compose', 'up', '-d'],
+        #['docker', 'compose', 'up', '-d', '--no-deps', 'billing', 'weight'],
     ]
 
     for cmd in commands:
@@ -35,6 +37,9 @@ def health():
 
 @app.route('/trigger', methods=['POST'])
 def trigger():
+    event = request.headers.get('X-GitHub-Event', '')
+    if event != 'push':
+        return jsonify({"status": "ignored", "reason": f"event '{event}' is not a push"}), 200
     payload = request.get_json(silent=True) or {}
     ref = payload.get('ref', 'refs/heads/main')
     branch = ref.split('/')[-1]
