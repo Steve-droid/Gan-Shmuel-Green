@@ -155,18 +155,29 @@ def get_weights():
 
     # 5. Execute the query and handle potential errors 
     try:
-        # 1. Get the connection and cursor from your imported helper
-        db = get_db()
-        cursor = db.cursor()
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
 
-        # 2. Now 'cursor' exists and you can use it!
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-    except Exception as e:
-        # This line is the magic part! It prints the REAL error to your terminal
-        print(f"DEBUG ERROR: {e}") 
+        # 2. Create the correct number of %s placeholders
+        # Example: if f_list is ['in', 'out'], this creates "%s, %s"
+        placeholders = ', '.join(['%s'] * len(f_list))
+
+        # 3. Build the query with the dynamic placeholders
+        query = f"SELECT id, truck, bruto, truckTara, neto, datetime FROM transactions WHERE datetime BETWEEN %s AND %s AND direction IN ({placeholders})"
         
-        return jsonify({"error": "Database connection failed"}), 500
+        # 4. Flatten all arguments into one tuple: (t1, t2, 'in', 'out'...)
+        params = [t1, t2] + f_list
+        
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        return jsonify(results), 200
+
+    except Exception as e:
+        print(f"DEBUG ERROR: {e}")
+        return jsonify({"error": "Database error"}), 500
     
     # 6. Transform raw database rows into a list of dictionaries 
     results = []
