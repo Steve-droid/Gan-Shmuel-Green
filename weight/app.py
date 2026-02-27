@@ -155,10 +155,17 @@ def get_weights():
 
     # 5. Execute the query and handle potential errors 
     try:
+        # 1. Get the connection and cursor from your imported helper
+        db = get_db()
+        cursor = db.cursor()
+
+        # 2. Now 'cursor' exists and you can use it!
         cursor.execute(query, params)
-        rows = cursor.fetchall()  # Fetch all matching records
+        rows = cursor.fetchall()
     except Exception as e:
-        # If the database fails, return a 500 error instead of crashing
+        # This line is the magic part! It prints the REAL error to your terminal
+        print(f"DEBUG ERROR: {e}") 
+        
         return jsonify({"error": "Database connection failed"}), 500
     
     # 6. Transform raw database rows into a list of dictionaries 
