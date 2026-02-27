@@ -15,9 +15,11 @@ REPO_DIR = os.environ.get('REPO_DIR', '/repo')
 
 def run_pipeline(branch):
     commands = [
-        ['git', 'pull', 'origin', branch],
+        ['git', 'fetch', 'origin', branch],
+        ['git', 'checkout', branch],
+        ['git', 'reset', '--hard', f'origin/{branch}'],
         ['docker', 'compose', 'build'],
-        ['docker', 'compose', 'up', '-d'],
+        #['docker', 'compose', 'up', '-d', '--no-deps', 'billing', 'weight'],
     ]
 
     for cmd in commands:
