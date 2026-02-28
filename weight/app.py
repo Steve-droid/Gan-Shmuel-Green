@@ -134,26 +134,52 @@ def post_weight():
 
 @app.get('/weight')
 def get_weights():
-    # 1. Prepare default time values 
-    # We use these if the user doesn't provide "from" or "to" in the URL
-    now_str = datetime.now().strftime('%Y%m%d%H%M%S')
-    today_midnight = datetime.now().strftime('%Y%m%d000000')
+    # --- 1. SET DEFAULTS & GET PARAMS ---
+    now = datetime.now()
+    now_str = now.strftime('%Y%m%d%H%M%S')
+    today_midnight = now.strftime('%Y%m%d000000')
 
-    # 2. Extract parameters from the URL 
+
+    # Extract parameters from the URL ---
     t1 = request.args.get("from", today_midnight)
     t2 = request.args.get("to", now_str)
     f = request.args.get("filter", "in,out,none")
-    
-    # 3. Process the filter string into a list 
-    # Example: "in,out" becomes ["in", "out"]
-    f_list = f.split(',')
-    
-    # 4. Define the SQL search query 
-    # We use %s placeholders to safely pass our Python variables to SQL
-    query = "SELECT id, truck, bruto, truckTara, neto, datetime FROM transactions WHERE datetime BETWEEN %s AND %s AND direction IN %s"
-    params = (t1, t2, tuple(f_list))
 
-    # 5. Execute the query and handle potential errors 
+    # --- 2. VALIDATE DATE FORMATS (Edge Case: Invalid Format) ---
+    try:
+        t1_dt = datetime.strptime(t1, '%Y%m%d%H%M%S')
+        t2_dt = datetime.strptime(t2, '%Y%m%d%H%M%S')
+    except ValueError:
+        return jsonify({"error": "Invalid date format. Please use yyyymmddhhmmss"}), 400
+
+    # --- 3. VALIDATE DATE LOGIC (Edge Case: Reversed Ranges) ---
+    if t1_dt > t2_dt:
+        return jsonify({"error": "Invalid range: 'from' date cannot be later than 'to' date"}), 400
+
+    # --- 4. VALIDATE FUTURE DATES (Edge Case: Range in the future) ---
+    if t1_dt > now:
+        return jsonify({"message": "No sessions recorded for this future time range"}), 200
+    
+    # If t2 is in the future, we cap it at 'now' so the query is efficient
+    if t2_dt > now:
+        t2 = now_str
+
+    # --- 5. VALIDATE FILTERS (Edge Case: Invalid/Empty Values) ---
+    allowed_filters = {"in", "out", "none"}
+    
+    # Check if empty filter (Edge Case: Empty Filter)
+    if not f.strip():
+        f_list = list(allowed_filters) # Default back to all types
+    else:
+        # Convert string to list and clean whitespace/lowercase
+        f_list = [x.strip().lower() for x in f.split(',') if x.strip()]
+        
+        # Validate values (Edge Case: Invalid Filter Values)
+        for val in f_list:
+            if val not in allowed_filters:
+                return jsonify({"error": f"Invalid filter: '{val}'. Use 'in', 'out', or 'none'"}), 400
+
+    # --- 6. DATABASE EXECUTION ---
     try:
         conn = get_db()
         cursor = conn.cursor(dictionary=True)
@@ -171,13 +197,18 @@ def get_weights():
         cursor.execute(query, params)
         results = cursor.fetchall()
         
+        if not results:
+            return jsonify({
+                "message": f"No weighing sessions exist for the requested time range ({t1} to {t2})"
+            }), 200
+
         cursor.close()
         conn.close()
         return jsonify(results), 200
 
     except Exception as e:
         print(f"DEBUG ERROR: {e}")
-        return jsonify({"error": "Database error"}), 500
+        return jsonify({"error": "Internal database error"}), 500
     
     # 6. Transform raw database rows into a list of dictionaries 
     results = []
