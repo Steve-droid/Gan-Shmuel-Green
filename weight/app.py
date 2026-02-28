@@ -4,7 +4,17 @@ from db import get_db, test_connection
 from typing import List, Optional, Literal
 import uuid
 from datetime import datetime, timezone
-from db import transactions
+from typing import Literal
+from db import (
+    get_db,
+    test_connection,
+    insert_transaction,
+    update_transaction,
+    get_last_transaction_for_truck,
+    get_last_open_in_for_truck,
+    get_containers_tara,
+)
+from entity_models import Transaction
 
 app = Flask(__name__)
 
@@ -40,17 +50,32 @@ def post_weight():
     """Record a weight measurement"""
     data = request.get_json(silent=True) or {}
 
-    required = ["direction", "truck", "containers", "weight", "unit", "force", "produce"]
-    if not all(k in data for k in required):
-        return jsonify({"error": "Missing required fields"}), 400
+    def validate_post_weight_input(data):
+        for field in ("direction", "weight", "unit"):
+                if field not in data:
+                    return jsonify({"error": f"Missing required field: {field}"}), 400
 
+        direction = str(data["direction"]).lower().strip()
+        if direction not in ("in", "out", "none"):
+            return jsonify({"error": "direction must be one of: in, out, none"}), 400
+
+        if direction != "none":
+            if "truck" not in data:
+                return jsonify({"error": f"Missing required field: truck"}), 400
+            if direction == "in":
+                for field in ("produce", "containers"):
+                    if field not in data:
+                        return jsonify({"error": f"For a truck going in, Missing at least one required field: {field}"}), 400
+
+    err = validate_post_weight_input(data)
+    if err:
+        return err
     direction = str(data["direction"]).lower().strip()
-    if direction not in ("in", "out", "none"):
-        return jsonify({"error": "direction must be one of: in, out, none"}), 400
-
-    truck = str(data["truck"]).strip()
-    produce = str(data["produce"]).strip()
-    force = bool(data["force"])
+    weight = data["weight"]
+    unit = str(data["unit"]).lower().strip()
+    truck = str(data.get("truck", "na")).strip()
+    produce = str(data.get("produce", "na")).strip()
+    force = bool(data.get("force", False))
     
     try:
         bruto_kg = to_kg_int(int(data["weight"]), str(data["unit"]))
@@ -58,7 +83,7 @@ def post_weight():
         return jsonify({"error": "Invalid weight/unit"}), 400
     
 
-    containers_list = parse_containers(data["containers"])
+    containers_list = parse_containers(data.get("containers"))
     containers_csv = ",".join(containers_list)
 
     now = datetime.now(timezone.utc)  
@@ -96,40 +121,133 @@ def post_weight():
             return None
         return last_in
     
-    last_tx = last_tx_for_truck()
-    open_in = last_open_in_for_truck()
-
-    #none after in not allow
-    if direction == "none" and open_in is not None:
-        return jsonify({"error": "none after in is not allowed"}), 400
-
-    # out בלי in -> error
-    if direction == "out" and open_in is None:
-        return jsonify({"error": "out without an in is not allowed"}), 400
-
-    # in אחרי in (כלומר יש open_in) -> error או force overwrite
-    if direction == "in" and open_in is not None and not force:
-        return jsonify({"error": "in followed by in requires force=true"}), 400
-
-    # out אחרי out -> error או force overwrite
-    if direction == "out" and last_tx is not None and last_tx.direction == "out" and not force:
-        return jsonify({"error": "out followed by out requires force=true"}), 400
-
-
     
-    # TODO: Implement logic
-    # - Validate direction (in/out/none) 
-    # - Check session constraints (in/in, out/out, out without in)
-    # - Generate/return session id
-    # - Store in `transactions` table
+
+    def validate_session_constraints(direction, open_in, last_tx, force):
+        #none after in not allowed
+        if direction == "none" and open_in is not None:
+            return jsonify({"error": "none after in is not allowed"}), 400
+
+        # out without an in -> error
+        if direction == "out" and open_in is None:
+            return jsonify({"error": "out without an in is not allowed"}), 400
+
+        # in followed by in -> error or force overwrite
+        if direction == "in" and open_in is not None and not force:
+            return jsonify({"error": "in followed by in requires force=true"}), 400
+
+        # out followed by out -> error or force overwrite
+        if direction == "out" and last_tx is not None and last_tx.direction == "out" and not force:
+            return jsonify({"error": "out followed by out requires force=true"}), 400   
+
+
+    # last_tx = last_tx_for_truck()
+    # open_in = last_open_in_for_truck() 
     
-    return jsonify({
-        'id': 'session_001',
-        'truck': data['truck'],
-        'bruto': data['weight']
-        #, 'truckTara': None,   
-        # 'neto': None
-    }), 201
+    # Fetch truck state directly from DB
+    last_tx = get_last_transaction_for_truck(truck) if truck != "na" else None
+    open_in = get_last_open_in_for_truck(truck) if truck != "na" else None
+    
+    err = validate_session_constraints(direction, open_in, last_tx, force)
+    if err:
+        return err
+
+    if direction == "in":
+        if open_in and force:
+            # Overwrite existing "in" row in place with same id and sessionId, new data
+            update_transaction(open_in.id, {
+                'datetime': now,
+                'truck': truck,
+                'containers': ','.join(containers_list),
+                'bruto': bruto_kg,
+                'produce': produce,
+            })
+            return jsonify({
+                'id': open_in.id,
+                'truck': truck,
+                'bruto': bruto_kg
+            }), 201
+            
+        else:
+            new_tx = Transaction(
+            datetime=now,
+            direction=direction,
+            truck=truck,
+            containers=containers_list,
+            bruto=bruto_kg,
+            truck_tara=None,
+            neto=None,
+            produce=produce,
+            session_id=None,
+            )
+
+            tx_id = insert_transaction(new_tx)
+            return jsonify({
+                'id': tx_id,
+                'truck': truck,
+                'bruto': bruto_kg
+            }), 201
+
+    elif direction == "out":
+        session_id = open_in.session_id
+        truck_tara = bruto_kg  # the "out" measurement is the truck's tara (empty weight)
+
+        container_taras = get_containers_tara(open_in.containers or [])
+        if None in container_taras.values():
+            neto = "na"
+        else:
+            neto = open_in.bruto - truck_tara - sum(container_taras.values())
+
+        if last_tx and last_tx.direction == "out" and force:
+            # Overwrite existing "out" row in place with same id and sessionId, new data
+            update_transaction(last_tx.id, {
+                'datetime': now,
+                'truck': truck,
+                'containers': ','.join(containers_list),
+                'bruto': bruto_kg,
+                'truckTara': truck_tara,
+                'neto': neto if isinstance(neto, int) else None,
+                'produce': produce,
+            })
+        else:
+            new_tx = Transaction(
+                datetime=now,
+                direction=direction,
+                truck=truck,
+                containers=containers_list,
+                bruto=bruto_kg,
+                truck_tara=truck_tara,
+                neto=neto if isinstance(neto, int) else None,
+                produce=produce,
+                session_id=session_id,
+            )
+            insert_transaction(new_tx)
+        return jsonify({
+            'id': session_id,
+            'truck': truck,
+            'bruto': bruto_kg,
+            'truckTara': truck_tara,
+            'neto': neto
+        }), 201
+
+    else:  # direction == "none"
+        new_tx = Transaction(
+            datetime=now,
+            direction=direction,
+            truck=truck,
+            containers=containers_list,
+            bruto=bruto_kg,
+            truck_tara=None,
+            neto=None,
+            produce=produce,
+            session_id=None,
+        )
+        tx_id = insert_transaction(new_tx)
+        return jsonify({
+            'id': tx_id,
+            'truck': truck,
+            'bruto': bruto_kg
+        }), 201
 
 
 @app.get('/weight')
