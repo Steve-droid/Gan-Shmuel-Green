@@ -93,7 +93,6 @@ def post_weight():
     containers_csv = ",".join(containers_list)
 
     now = datetime.now(timezone.utc)  
-    
 
 
     def validate_session_constraints(direction, open_in, last_tx, force):
@@ -406,7 +405,7 @@ def health_check():
         return jsonify({'status': 'Failure'}), 500
     
 
-    
+
 
 
 if __name__ == '__main__':
