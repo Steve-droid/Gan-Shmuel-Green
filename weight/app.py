@@ -13,6 +13,12 @@ from db import (
     get_last_transaction_for_truck,
     get_last_open_in_for_truck,
     get_containers_tara,
+    get_item_type,
+    get_container_tara_kg,
+    get_truck_last_tara_kg,
+    get_sessions_for_truck,
+    get_sessions_for_container,
+    
 )
 from entity_models import Transaction
 
@@ -94,7 +100,14 @@ def post_weight():
         return (
             transactions.query
             .filter_by(truck=truck)
-            .order_by(transactions.datetime.desc(), transactions.id.desc())
+            .order_by(transacirection": "out",
+        "truck": "12-345-67",
+        "containers": "C1,C2",
+        "weight": 20000,
+        "unit": "kg",
+        "force": False,
+        "produce": "orange",
+    }tions.datetime.desc(), transactions.id.desc())
             .first()
         )
     
@@ -387,15 +400,40 @@ def get_unknown():
 
 @app.get('/item/<item_id>')
 def get_item(item_id):
-    """Get item (truck or container) details"""
-    from_dt = request.args.get('from')
-    to_dt = request.args.get('to')
-    
-    # TODO: Implement logic
-    # - Query `transactions` and `containers_registered` tables
-    # - Return tara and sessions
-    
-    return jsonify({'id': item_id, 'tara': None, 'sessions': []}), 200
+    now = datetime.now()
+    default_t2 = now.strftime('%Y%m%d%H%M%S')
+    default_t1 = now.strftime('%Y%m') + '01000000'  # 1st of month 00:00:00
+
+    t1 = request.args.get('from', default_t1)
+    t2 = request.args.get('to', default_t2)
+
+    # validate format
+    try:
+        t1_dt = datetime.strptime(t1, '%Y%m%d%H%M%S')
+        t2_dt = datetime.strptime(t2, '%Y%m%d%H%M%S')
+    except ValueError:
+        return jsonify({"error": "Invalid date format. Please use yyyymmddhhmmss"}), 400
+
+    if t1_dt > t2_dt:
+        return jsonify({"error": "Invalid range: 'from' date cannot be later than 'to' date"}), 400
+
+    # decide item type (truck/container) or 404
+    item_type = get_item_type(item_id)
+    if item_type is None:
+        return jsonify({"error": "Item not found"}), 404
+
+    if item_type == "container":
+        tara = get_container_tara_kg(item_id)
+        sessions = get_sessions_for_container(item_id, t1, t2)
+    else:  # truck
+        tara = get_truck_last_tara_kg(item_id)
+        sessions = get_sessions_for_truck(item_id, t1, t2)
+
+    return jsonify({
+        "id": item_id,
+        "tara": tara if tara is not None else "na",
+        "sessions": sessions
+    }), 200
 
 
 @app.get('/health')
@@ -406,6 +444,9 @@ def health_check():
         return jsonify({'status': 'OK'}), 200
     else:
         return jsonify({'status': 'Failure'}), 500
+    
+
+    
 
 
 if __name__ == '__main__':
