@@ -93,48 +93,8 @@ def post_weight():
     containers_csv = ",".join(containers_list)
 
     now = datetime.now(timezone.utc)  
-    #return the most recent version of the truck
-    def last_tx_for_truck():
-        if truck == "na":
-            return None
-        return (
-            transactions.query
-            .filter_by(truck=truck)
-            .order_by(transacirection": "out",
-        "truck": "12-345-67",
-        "containers": "C1,C2",
-        "weight": 20000,
-        "unit": "kg",
-        "force": False,
-        "produce": "orange",
-    }tions.datetime.desc(), transactions.id.desc())
-            .first()
-        )
     
-    #Returns the truck's last IN, only if it is still "open".
-    def last_open_in_for_truck():
-        if truck == "na":
-            return None
 
-        last_in = (
-            transactions.query
-            .filter_by(truck=truck, direction="in")
-            .order_by(transactions.datetime.desc(), transactions.id.desc())
-            .first()
-        )
-        if not last_in:
-            return None
-
-        out_exists = (
-            transactions.query
-            .filter_by(truck=truck, direction="out", session_id=last_in.session_id)
-            .first()
-        )
-        if out_exists:
-            return None
-        return last_in
-    
-    
 
     def validate_session_constraints(direction, open_in, last_tx, force):
         #none after in not allowed
