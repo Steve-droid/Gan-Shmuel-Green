@@ -1,21 +1,8 @@
 services:
-  ci:
-    build: ./ci
-    ports:
-      - "8085:8085"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - .:/repo
-    environment:
-      - REPO_DIR=/repo
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: unless-stopped
-  
   billing:
     build: ./billing
     ports:
-      - "8081:8081"
+      - "8083:8081"
     environment:
       - DB_HOST=billing-db
       - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
@@ -30,11 +17,11 @@ services:
     volumes:
       - ./resources/db_schemas/multi-db/billingdb.sql:/docker-entrypoint-initdb.d/billingdb.sql
     restart: unless-stopped
-  
+
   weight:
     build: ./weight
     ports:
-      - "8080:8080"
+      - "8082:8080"
     environment:
       - DB_HOST=weight-db
       - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
@@ -49,4 +36,3 @@ services:
     volumes:
       - ./resources/db_schemas/multi-db/weightdb.sql:/docker-entrypoint-initdb.d/weightdb.sql
     restart: unless-stopped
-

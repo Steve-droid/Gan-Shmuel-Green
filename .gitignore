@@ -1,13 +1,13 @@
-  # Environment variables / credentials                                                                                                                                                                        
-  .env                                                                                                                                                                                                         
-  *.env                                                                                                                                                                                                        
-                                                                                                                                                                                                               
-  # Python artifacts
-  __pycache__/
-  *.pyc
-  *.pyo
+# Environment variables / credentials                                                                                                                                                                        
+.env                                                                                                                                                                                                         
+*.env                                                                                                                                                                                                        
+                                                                                                                                                                                                              
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
 
-  # SSH keys
-  *.pem
-  *.key
+# SSH keys
+*.pem
+*.key
 
