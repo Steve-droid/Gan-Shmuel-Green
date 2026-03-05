@@ -62,8 +62,14 @@ def run_pipeline(branch):
     time.sleep(5)
 
     # Step 5: Deploy to production
+    if branch != 'main':
+      logging.info(f"Branch '{branch}' is not 'main' - skipping production deploy")
+      logging.info("Pipeline finished successfully")
+      return
+    
+
     result = subprocess.run(
-        ['docker', 'compose', 'up', '-d', '--no-deps', 'billing', 'weight'],
+        ['docker', 'compose', '-p', 'gan-shmuel', 'up', '-d', '--no-deps', 'billing', 'weight'],
         cwd=REPO_DIR, capture_output=True, text=True
     )
     logging.info(f"Production deploy: {result.stdout.strip()}")
