@@ -47,6 +47,9 @@ def run_pipeline(branch):
     if result.returncode != 0:
         logging.error(f"Test deploy failed: {result.stderr.strip()}")
         return
+    
+    # Wait for containers to finish booting
+    time.sleep(5)
 
     # Step 4: Run tests
     result = subprocess.run(
@@ -58,8 +61,7 @@ def run_pipeline(branch):
         logging.error(f"Tests failed: {result.stderr.strip()}")
         return
     
-    # Wait for containers to finish booting
-    time.sleep(5)
+   
 
     # Step 5: Deploy to production
     if branch != 'main':
