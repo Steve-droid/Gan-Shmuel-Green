@@ -2,7 +2,8 @@ from flask import Flask, request, jsonify
 import subprocess                                                                                                                                                                                 
 import threading                                                                                                                                                                                  
 import os                                                                                                                                                                                         
-import logging  
+import logging
+import time
 
 # Configure the global logging system
 logging.basicConfig(
@@ -56,6 +57,9 @@ def run_pipeline(branch):
     if result.returncode != 0:
         logging.error(f"Tests failed: {result.stderr.strip()}")
         return
+    
+    # Wait for containers to finish booting
+    time.sleep(5)
 
     # Step 5: Deploy to production
     result = subprocess.run(
