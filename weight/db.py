@@ -1,17 +1,20 @@
 # Database layer for weight microservice
+import os
 import mysql.connector
+from dotenv import load_dotenv
 from mysql.connector import Error
 from entity_models import Container, Transaction
 from datetime import datetime
 from typing import List, Optional
 
-# MySQL connection configuration
+load_dotenv()  # loads .env into os.environ (skips vars already set in environment)
+
 DB_CONFIG = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': 'rootpass',
-    'database': 'weight',
-    'port': 3306
+    'host':     os.environ['DB_HOST'],
+    'user':     os.environ['DB_USER'],
+    'password': os.environ['DB_PASSWORD'],
+    'database': os.environ['DB_NAME'],
+    'port':     int(os.environ['DB_PORT']),
 }
 
 
@@ -147,6 +150,25 @@ def update_transaction(tx_id: int, fields: dict) -> None:
     cursor.close()
     conn.close()
 
+
+
+def upsert_containers(containers: List['Container']) -> None:
+    """Insert or update container tara weights in batches."""
+    if not containers:
+        return
+    conn = get_db()
+    cursor = conn.cursor()
+    for c in containers:
+        d = c.to_db_dict()
+        cursor.execute(
+            """INSERT INTO containers_registered (container_id, weight, unit)
+               VALUES (%s, %s, %s)
+               ON DUPLICATE KEY UPDATE weight = VALUES(weight), unit = VALUES(unit)""",
+            (d['container_id'], d['weight'], d['unit'])
+        )
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 
 def get_containers_tara(container_ids: List[str]) -> dict:
