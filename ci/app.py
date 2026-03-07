@@ -2,7 +2,8 @@ from flask import Flask, request, jsonify
 import subprocess                                                                                                                                                                                 
 import threading                                                                                                                                                                                  
 import os                                                                                                                                                                                         
-import logging  
+import logging
+import time
 
 # Configure the global logging system
 logging.basicConfig(
@@ -13,21 +14,88 @@ logging.basicConfig(
 app = Flask(__name__)                                                                                                                                                                                                                       
 REPO_DIR = os.environ.get('REPO_DIR', '/repo')
 
+def cleanup_test_env():
+    result = subprocess.run(
+            ['docker', 'compose', '-p', 'gan-shmuel-test', '-f', 'docker-compose.test.yml', 'down'],
+            cwd=REPO_DIR, capture_output=True, text=True
+    )
+    logging.info(f"Test cleanup: {result.stdout.strip()}")
+    if result.returncode != 0:
+        logging.error(f"Test environment cleanup failed: {result.stderr.strip()}")
+
+
 def run_pipeline(branch):
-    commands = [
+    # Step 1: Update repo
+    git_commands = [
         ['git', 'fetch', 'origin', branch],
         ['git', 'checkout', branch],
         ['git', 'reset', '--hard', f'origin/{branch}'],
-        ['docker', 'compose', 'build'],
-        #['docker', 'compose', 'up', '-d', '--no-deps', 'billing', 'weight'],
     ]
-
-    for cmd in commands:
+    for cmd in git_commands:
         result = subprocess.run(cmd, cwd=REPO_DIR, capture_output=True, text=True)
         logging.info(f"{' '.join(cmd)}: {result.stdout.strip()}")
         if result.returncode != 0:
             logging.error(f"Failed: {result.stderr.strip()}")
             return
+
+    # Step 2: Build images
+    result = subprocess.run(
+        ['docker', 'compose', 'build'],
+        cwd=REPO_DIR, capture_output=True, text=True
+    )
+    logging.info(f"docker compose build: {result.stdout.strip()}")
+    if result.returncode != 0:
+        logging.error(f"Build failed: {result.stderr.strip()}")
+        return
+
+    # Step 3: Deploy to test environment
+    result = subprocess.run(
+        ['docker', 'compose', '-p', 'gan-shmuel-test', '-f', 'docker-compose.test.yml', 'up', '-d', '--build'],
+        cwd=REPO_DIR, capture_output=True, text=True
+    )
+    logging.info(f"Test deploy: {result.stdout.strip()}")
+    if result.returncode != 0:
+        logging.error(f"Test deploy failed: {result.stderr.strip()}")
+        return
+    
+    # Wait for containers to finish booting
+    time.sleep(5)
+
+    # Step 4: Run tests
+    result = subprocess.run(
+        ['python', f'{REPO_DIR}/tests/test_health.py'],
+        capture_output=True, text=True
+    )
+    
+    logging.info(f"Tests: {result.stdout.strip()}")
+    
+    # On success/failure, we cleanup the test environment
+    if result.returncode != 0:
+        logging.error(f"Tests failed: {result.stderr.strip()}")
+        cleanup_test_env()
+        return
+
+    cleanup_test_env()
+
+
+
+    
+    # Step 5: Deploy to production
+    if branch != 'main':
+      logging.info(f"Branch '{branch}' is not 'main' - skipping production deploy")
+      logging.info("Pipeline finished successfully")
+      return
+    
+
+    result = subprocess.run(
+        ['docker', 'compose', '-p', 'gan-shmuel', 'up', '-d', '--no-deps', 'billing', 'weight'],
+        cwd=REPO_DIR, capture_output=True, text=True
+    )
+    logging.info(f"Production deploy: {result.stdout.strip()}")
+    if result.returncode != 0:
+        logging.error(f"Production deploy failed: {result.stderr.strip()}")
+        return
+
     logging.info("Pipeline finished successfully")
 
 @app.route('/health', methods=['GET'])
