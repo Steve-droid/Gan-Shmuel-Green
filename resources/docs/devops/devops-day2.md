@@ -72,7 +72,7 @@ Without `-f`, Compose always looks for `docker-compose.yml` in the current direc
 7. ✅ **Update `run_pipeline()` in `app.py`** — add test deploy → run tests → prod deploy flow (with sleep, branch check, project name fix)
 8. ✅ **Test locally** — full pipeline verified end-to-end on local machine
 9. ✅ **Add test container cleanup** — tear down test containers after tests complete
-10. ⬜ **Mailing system** — send email on pipeline success/failure
+10. ✅ **Mailing system** — send email on pipeline success/failure
 
 ---
 
@@ -780,6 +780,103 @@ The cleanup command is called in two places: on test failure (before returning) 
 ### When cleanup runs
 
 Cleanup runs in both the success and failure paths — test containers are always torn down before the pipeline continues to step 5 or exits. This ensures no stale test containers are left behind regardless of outcome.
+
+---
+
+## Subtask 10: Mailing System
+
+### Why
+
+Without email notifications, the only way to know the pipeline failed is to check the CI logs manually. Email alerts mean developers are notified automatically — they can act on failures without polling.
+
+### Notification policy
+
+| Event | Recipients |
+|---|---|
+| Any branch fails | Team that owns the branch + DevOps team |
+| `main` fails | Everyone |
+| `main` succeeds | Everyone |
+| Non-main branch succeeds | Branch's team + DevOps team |
+
+The team is extracted from the branch name using the naming convention `<team>-<feature>` — e.g. `weight-new-feature` → `weight`. If the prefix doesn't match a known team (naming convention violated), DevOps is notified as a fallback.
+
+### Credentials
+
+Add to `.env` (never committed):
+```
+GMAIL_USER=ganshmuelci@gmail.com
+GMAIL_PASSWORD=<app-password>
+NOTIFY_ALL=everyone@gmail.com,...
+NOTIFY_DEVOPS=steve@gmail.com
+NOTIFY_WEIGHT=weight1@gmail.com,weight2@gmail.com
+NOTIFY_BILLING=billing1@gmail.com,billing2@gmail.com
+```
+
+`GMAIL_USER` and `GMAIL_PASSWORD` are the sender account credentials. A dedicated Gmail account (`ganshmuelci@gmail.com`) is used instead of a personal account so personal credentials are never on the server. Gmail requires an **app password** (generated under Google Account → Security → 2-Step Verification → App passwords) — regular passwords are rejected.
+
+`NOTIFY_*` are recipient lists. `NOTIFY_ALL` is used for `main` branch events. `NOTIFY_DEVOPS`, `NOTIFY_WEIGHT`, `NOTIFY_BILLING` are used for team-specific notifications.
+
+### New code in `app.py`
+
+**Imports:**
+```python
+import smtplib
+from email.mime.text import MIMEText
+```
+
+**Globals:**
+```python
+EMAIL_FROM = os.environ.get('GMAIL_USER')
+EMAIL_TO = os.environ.get('NOTIFY_ALL', EMAIL_FROM)
+EMAIL_PASSWORD = os.environ.get('GMAIL_PASSWORD')
+```
+
+**`get_recipients()` — resolves who to notify based on branch:**
+```python
+def get_recipients(branch):
+    if branch == 'main':
+        return os.environ.get('NOTIFY_ALL', '')
+    team = branch.split('-')[0]
+    team_emails = os.environ.get(f'NOTIFY_{team.upper()}', '')
+    devops_emails = os.environ.get('NOTIFY_DEVOPS', '')
+    if not team_emails:
+        logging.warning(f"No recipients configured for team '{team}', notifying DevOps only")
+        return devops_emails
+    combined = set(filter(None, team_emails.split(',') + devops_emails.split(',')))
+    return ','.join(combined)
+```
+
+`branch.split('-')[0]` extracts the team prefix — `weight-new-feature` → `weight`. The corresponding `NOTIFY_WEIGHT` env var is looked up. If not found (naming convention violated), DevOps-only fallback.
+
+**`send_email()` — sends the notification:**
+```python
+def send_email(subject, body, recipients):
+    if not EMAIL_FROM or not EMAIL_PASSWORD or not recipients:
+        logging.warning("Email not sent: missing credentials or recipients")
+        return
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['From'] = EMAIL_FROM
+    msg['To'] = recipients
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(EMAIL_FROM, EMAIL_PASSWORD)
+            server.sendmail(EMAIL_FROM, recipients.split(','), msg.as_string())
+        logging.info(f"Email sent: {subject}")
+    except Exception as e:
+        logging.error(f"Failed to send email: {e}")
+```
+
+`SMTP_SSL` on port 465 connects encrypted from the start (simpler than STARTTLS on 587). `sendmail` takes a list of addresses for actual delivery — `recipients.split(',')` splits the comma-separated string. `msg['To']` is the display header; `sendmail` is what actually routes the message. The whole send is wrapped in `try/except` — if email fails, the pipeline continues rather than crashing, since the deploy already happened.
+
+**`send_email()` calls in `run_pipeline()`:**
+
+`recipients = get_recipients(branch)` is resolved once at the top. Every exit point calls `send_email()`:
+- Step 1-3 failures: `[FAIL]` with stderr
+- Step 4 failure: `[FAIL]` with stdout (test output, not stderr, is where the `[FAIL]` lines appear)
+- Non-main success: `[SUCCESS]` noting prod deploy was skipped
+- Step 5 failure: `[FAIL]` with stderr
+- Final success: `[SUCCESS]` confirming production deployed
 
 ---
 
