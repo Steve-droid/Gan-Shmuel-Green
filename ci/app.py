@@ -14,6 +14,16 @@ logging.basicConfig(
 app = Flask(__name__)                                                                                                                                                                                                                       
 REPO_DIR = os.environ.get('REPO_DIR', '/repo')
 
+def cleanup_test_env():
+    result = subprocess.run(
+            ['docker', 'compose', '-p', 'gan-shmuel-test', '-f', 'docker-compose.test.yml', 'down'],
+            cwd=REPO_DIR, capture_output=True, text=True
+    )
+    logging.info(f"Test cleanup: {result.stdout.strip()}")
+    if result.returncode != 0:
+        logging.error(f"Test environment cleanup failed: {result.stderr.strip()}")
+
+
 def run_pipeline(branch):
     # Step 1: Update repo
     git_commands = [
@@ -56,13 +66,20 @@ def run_pipeline(branch):
         ['python', f'{REPO_DIR}/tests/test_health.py'],
         capture_output=True, text=True
     )
+    
     logging.info(f"Tests: {result.stdout.strip()}")
+    
+    # On success/failure, we cleanup the test environment
     if result.returncode != 0:
         logging.error(f"Tests failed: {result.stderr.strip()}")
+        cleanup_test_env()
         return
-    
-   
 
+    cleanup_test_env()
+
+
+
+    
     # Step 5: Deploy to production
     if branch != 'main':
       logging.info(f"Branch '{branch}' is not 'main' - skipping production deploy")

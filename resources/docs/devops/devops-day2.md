@@ -63,14 +63,16 @@ Without `-f`, Compose always looks for `docker-compose.yml` in the current direc
 
 ## Subtasks
 
-1. **Create billing stub** — `billing/app.py`, `billing/Dockerfile`, `billing/requirements.txt` with just `GET /health`
-2. **Create weight stub** — `weight/app.py`, `weight/Dockerfile`, `weight/requirements.txt` with just `GET /health`
-3. **Update `docker-compose.yml`** — add billing (8081), weight (8080), billing-db, weight-db production services
-4. **Create `docker-compose.test.yml`** — test environment with billing (8083), weight (8082), billing-db, weight-db on separate containers
-5. **Create `.env` file** — DB credentials, never committed to the repo
-6. **Create test script** — `tests/test_health.py` using `requests` to hit `/health` on each test service and assert `200 OK`
-7. **Update `run_pipeline()` in `app.py`** — add test deploy → run tests → prod deploy flow
-8. **Test on EC2** — deploy and verify the full pipeline runs end-to-end
+1. ✅ **Create billing stub** — `billing/app.py`, `billing/Dockerfile`, `billing/requirements.txt` with just `GET /health`
+2. ✅ **Create weight stub** — `weight/app.py`, `weight/Dockerfile`, `weight/requirements.txt` with just `GET /health`
+3. ✅ **Update `docker-compose.yml`** — add billing (8081), weight (8080), billing-db, weight-db production services
+4. ✅ **Create `docker-compose.test.yml`** — test environment with billing (8083), weight (8082), billing-db, weight-db on separate containers
+5. ✅ **Create `.env` file** — DB credentials, never committed to the repo
+6. ✅ **Create test script** — `tests/test_health.py` using `requests` to hit `/health` on each test service and assert `200 OK`
+7. ✅ **Update `run_pipeline()` in `app.py`** — add test deploy → run tests → prod deploy flow (with sleep, branch check, project name fix)
+8. ✅ **Test locally** — full pipeline verified end-to-end on local machine
+9. ✅ **Add test container cleanup** — tear down test containers after tests complete
+10. ⬜ **Mailing system** — send email on pipeline success/failure
 
 ---
 
@@ -541,6 +543,8 @@ def run_pipeline(branch):
         logging.error(f"Test deploy failed: {result.stderr.strip()}")
         return
 
+    time.sleep(5)  # Wait for containers to finish booting
+
     # Step 4: Run tests
     result = subprocess.run(
         ['python', f'{REPO_DIR}/tests/test_health.py'],
@@ -551,9 +555,14 @@ def run_pipeline(branch):
         logging.error(f"Tests failed: {result.stderr.strip()}")
         return
 
-    # Step 5: Deploy to production
+    # Step 5: Deploy to production (only from main)
+    if branch != 'main':
+        logging.info(f"Branch '{branch}' is not 'main' - skipping production deploy")
+        logging.info("Pipeline finished successfully")
+        return
+
     result = subprocess.run(
-        ['docker', 'compose', 'up', '-d', '--no-deps', 'billing', 'weight'],
+        ['docker', 'compose', '-p', 'gan-shmuel', 'up', '-d', '--no-deps', 'billing', 'weight'],
         cwd=REPO_DIR, capture_output=True, text=True
     )
     logging.info(f"Production deploy: {result.stdout.strip()}")
@@ -572,7 +581,7 @@ def run_pipeline(branch):
 
 **Step 4 — run tests:** `python /repo/tests/test_health.py` runs the test script inside the CI container. Python is available (it is the base image), `requests` is now installed, and the script is at `/repo/tests/test_health.py` via the bind mount. If the script calls `sys.exit(1)`, `result.returncode` is non-zero and the pipeline stops before production.
 
-**Step 5 — production deploy:** Only reached if tests passed. Deploys only billing and weight, skips ci.
+**Step 5 — production deploy:** Only reached if tests passed, and only if the branch is `main`. Non-main branches (feature branches, team branches) run CI (build + test) but skip CD (production deploy). Uses `-p gan-shmuel` to ensure the pipeline targets the correct project — without it, Docker Compose inside the container would derive the project name from `/repo` (the bind-mount path) and create duplicate containers instead of updating the existing production ones.
 
 ---
 
@@ -593,10 +602,198 @@ Two separate compose files:
 A Python script in a `tests/` directory at the repo root. It uses the `requests` library to hit `/health` on each test service and asserts `200 OK`. Simple enough to run against stubs now, extensible for real tests later.
 
 **Pipeline flow (updated):**
-1. Deploy to test: `docker compose -f docker-compose.test.yml up -d --build`
-2. Run tests against test ports
-3. If tests pass → deploy to prod: `docker compose up -d --no-deps billing weight`
-4. If tests fail → stop (+ email notification from the mailing system)
+1. Deploy to test: `docker compose -p gan-shmuel-test -f docker-compose.test.yml up -d --build`
+2. `time.sleep(5)` — wait for containers to boot
+3. Run tests against test ports
+4. If tests pass and branch is `main` → deploy to prod: `docker compose -p gan-shmuel up -d --no-deps billing weight`
+5. If tests fail or branch is not `main` → stop
+
+---
+
+## Bugs found during local testing
+
+### Bug 1: `time.sleep(5)` placed after the tests instead of before
+
+**Symptom:** Tests failed with `ConnectionResetError(104, 'Connection reset by peer')`. The connection was established (Flask was listening) but immediately dropped because the server hadn't finished booting.
+
+**Root cause:** `time.sleep(5)` was placed after step 4 (tests) instead of between step 3 (test deploy) and step 4. The tests ran milliseconds after `docker compose up -d` returned — before Flask had time to start.
+
+**Fix:** Move `time.sleep(5)` to between step 3 and step 4.
+
+**Note on `time.sleep` vs healthchecks:** A fixed sleep is a simple solution but not ideal for production — 5 seconds may be too short if the system is slow, or wasteful if containers boot in 1 second. A proper solution would poll the `/health` endpoint until it responds, then run tests. For this project, `time.sleep(5)` is sufficient.
+
+---
+
+### Bug 2: Branch check missing — pipeline deployed to production from non-main branches
+
+**Symptom:** Pushing to `devops-test-env` triggered a production deploy.
+
+**Root cause:** The branch check (`if branch != 'main': return`) was never added to `app.py`. The commit message claimed the fix was included but the code was not there.
+
+**Fix:** Add the branch check before step 5 in `run_pipeline()`.
+
+**Why this matters:** CI (build + test) should run on every branch — catching regressions early. CD (production deploy) should only happen from `main` — only reviewed, approved code reaches production.
+
+---
+
+### Bug 3: Wrong project name in production deploy
+
+**Symptom:** `docker compose up -d --no-deps billing weight` failed with "port is already allocated" — it tried to create new containers instead of updating the existing production ones.
+
+**Root cause:** The pipeline runs inside the CI container where the repo is mounted at `/repo`. Docker Compose derives the project name from the working directory name, so it used `repo` as the project name. The existing production containers were created with project name `gan-shmuel` (from the host directory name). So the pipeline created a new `repo-billing-1` container while `gan-shmuel-billing-1` was already running on the same host port.
+
+**Fix:** Explicitly pass `-p gan-shmuel` to the prod deploy command:
+```python
+['docker', 'compose', '-p', 'gan-shmuel', 'up', '-d', '--no-deps', 'billing', 'weight']
+```
+
+This forces Docker Compose to target the correct project regardless of where the command runs.
+
+---
+
+### Bug 4: File ownership changed by `git reset --hard` inside Docker container
+
+**Symptom:** VSCode showed "Insufficient permissions" when trying to save `app.py`.
+
+**Root cause:** The CI container runs as root. The repo is bind-mounted (`.:/repo`). When `git reset --hard` ran inside the container, git wrote files as root on the host filesystem. The user's account no longer owned those files.
+
+**Fix:** After any pipeline run that touches the repo from inside a container, restore ownership:
+```bash
+sudo chown -R $USER:$USER .
+```
+
+This only affects local development — on EC2 everything runs as root anyway.
+
+---
+
+## Subtask 8: Testing the pipeline locally (and how it maps to EC2)
+
+### What we did
+
+**Step 1 — Start the CI service locally:**
+```bash
+docker compose up -d --build ci
+```
+This starts the CI container on your laptop. Port 8085 is now open on localhost.
+
+**Step 2 — Trigger the pipeline manually:**
+```bash
+curl -X POST http://localhost:8085/trigger \
+  -H "Content-Type: application/json" \
+  -H "X-GitHub-Event: push" \
+  -d '{"ref": "refs/heads/devops-test-env"}'
+```
+On EC2, GitHub sends this request automatically when you push. Locally, your machine has no public IP so GitHub cannot reach `localhost:8085` — you simulate the webhook yourself with `curl`.
+
+**Step 3 — Watch the logs:**
+```bash
+docker compose logs -f ci
+```
+
+**What the pipeline did:**
+- `git fetch origin devops-test-env` + `git reset --hard` — fetched the latest code from GitHub. The remote is always GitHub regardless of whether CI runs locally or on EC2.
+- `docker compose build` — built images from the code on your machine
+- `docker compose -p gan-shmuel-test -f docker-compose.test.yml up -d` — started test containers on your machine (billing on port 8083, weight on port 8082)
+- `time.sleep(5)` — waited for Flask to boot
+- `python tests/test_health.py` — ran from inside the CI container, hit `host.docker.internal:8082` and `host.docker.internal:8083` → reached the test containers through the host port mapping
+- Branch check: `devops-test-env != main` → skipped production deploy
+
+**Result:**
+```
+git fetch + checkout + reset --hard ✓
+docker compose build ✓
+docker compose -p gan-shmuel-test -f docker-compose.test.yml up -d --build ✓
+time.sleep(5) ✓
+[PASS] billing /health returned 200
+[PASS] weight /health returned 200
+All tests passed ✓
+Branch 'devops-test-env' is not 'main' - skipping production deploy ✓
+Pipeline finished successfully ✓
+```
+
+---
+
+### How this maps to EC2
+
+The pipeline code is identical on EC2. The only differences are the trigger and the machine:
+
+| | Local | EC2 |
+|---|---|---|
+| Trigger | Manual `curl` | GitHub webhook (fires automatically on push) |
+| Machine | Developer laptop | EC2 server (3.108.241.170) |
+| Prod deploy | Skipped (non-main branch) | Runs when push is to `main` |
+
+Everything else — the Docker commands, the ports, the test script, `host.docker.internal` — works the same way on both machines.
+
+Local testing proves the pipeline logic is correct. EC2 is where it runs permanently in production.
+
+---
+
+## Subtask 9: Test container cleanup
+
+### The problem
+
+After the pipeline runs, the 4 test containers (`gan-shmuel-test-*`) stay running. They are not needed after tests complete — they just consume memory and ports. Without cleanup, containers accumulate after every pipeline run.
+
+### The fix
+
+A `cleanup_test_env()` helper function that tears down the test environment:
+
+```python
+def cleanup_test_env():
+    result = subprocess.run(
+        ['docker', 'compose', '-p', 'gan-shmuel-test', '-f', 'docker-compose.test.yml', 'down'],
+        cwd=REPO_DIR, capture_output=True, text=True
+    )
+    logging.info(f"Test cleanup: {result.stdout.strip()}")
+    if result.returncode != 0:
+        logging.error(f"Test environment cleanup failed: {result.stderr.strip()}")
+```
+
+And in `run_pipeline()`, the step 4 block becomes:
+
+```python
+    # Step 4: Run tests
+    result = subprocess.run(
+        ['python', f'{REPO_DIR}/tests/test_health.py'],
+        capture_output=True, text=True
+    )
+    logging.info(f"Tests: {result.stdout.strip()}")
+
+    # On success/failure, we cleanup the test environment
+    if result.returncode != 0:
+        logging.error(f"Tests failed: {result.stderr.strip()}")
+        cleanup_test_env()
+        return
+
+    cleanup_test_env()
+```
+
+### Why a separate function?
+
+The cleanup command is called in two places: on test failure (before returning) and on test success (before proceeding to step 5). Extracting it to a function avoids duplicating the same `subprocess.run` block twice.
+
+### Why `docker compose down` and not `docker compose down -v`?
+
+`down` stops and removes containers and the default network, but keeps named volumes (the database data). `down -v` would also wipe the volumes — destroying the test DB on every pipeline run. We keep the volumes so the DB schema is preserved between runs.
+
+### When cleanup runs
+
+Cleanup runs in both the success and failure paths — test containers are always torn down before the pipeline continues to step 5 or exits. This ensures no stale test containers are left behind regardless of outcome.
+
+---
+
+### Deploying the new pipeline to EC2
+
+The EC2 server still has the old CI image from Day 1. To update it:
+
+1. Merge `devops-test-env` → `devops` via PR
+2. SSH into EC2 and pull the `devops` branch
+3. Rebuild the CI container:
+   ```bash
+   sudo docker compose up -d --build ci
+   ```
+4. From that point, every GitHub push fires the full new pipeline automatically via the webhook.
 
 ---
 
