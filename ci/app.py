@@ -4,6 +4,8 @@ import threading
 import os                                                                                                                                                                                         
 import logging
 import time
+import smtplib                                                                
+from email.mime.text import MIMEText
 
 # Configure the global logging system
 logging.basicConfig(
@@ -13,6 +15,39 @@ logging.basicConfig(
 
 app = Flask(__name__)                                                                                                                                                                                                                       
 REPO_DIR = os.environ.get('REPO_DIR', '/repo')
+EMAIL_FROM = os.environ.get('GMAIL_USER')
+EMAIL_TO = os.environ.get('NOTIFY_ALL', EMAIL_FROM)
+EMAIL_PASSWORD = os.environ.get('GMAIL_PASSWORD')
+
+def send_email(subject, body, recipients):
+    if not EMAIL_FROM or not EMAIL_PASSWORD or not recipients:
+        logging.warning("Email not sent: missing credentials or recipients")
+        return
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['From'] = EMAIL_FROM
+    msg['To'] = recipients
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(EMAIL_FROM, EMAIL_PASSWORD)
+            server.sendmail(EMAIL_FROM, recipients.split(','), msg.as_string())
+        logging.info(f"Email sent: {subject}")
+    except Exception as e:
+        logging.error(f"Failed to send email: {e}")
+
+def get_recipients(branch):
+      if branch == 'main':
+          return os.environ.get('NOTIFY_ALL', '')
+      team = branch.split('-')[0]
+      team_emails = os.environ.get(f'NOTIFY_{team.upper()}', '')
+      devops_emails = os.environ.get('NOTIFY_DEVOPS', '')
+      if not team_emails:
+          # Unknown team prefix — fall back to notifying devops only
+          logging.warning(f"No recipients configured for team '{team}', notifying DevOps only")
+          return devops_emails
+      combined = set(filter(None, team_emails.split(',') +
+  devops_emails.split(',')))
+      return ','.join(combined)
 
 def cleanup_test_env():
     result = subprocess.run(
@@ -25,6 +60,8 @@ def cleanup_test_env():
 
 
 def run_pipeline(branch):
+    recipients = get_recipients(branch)
+
     # Step 1: Update repo
     git_commands = [
         ['git', 'fetch', 'origin', branch],
@@ -36,6 +73,7 @@ def run_pipeline(branch):
         logging.info(f"{' '.join(cmd)}: {result.stdout.strip()}")
         if result.returncode != 0:
             logging.error(f"Failed: {result.stderr.strip()}")
+            send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 1 (git) failed:\n{result.stderr.strip()}", recipients)
             return
 
     # Step 2: Build images
@@ -46,6 +84,7 @@ def run_pipeline(branch):
     logging.info(f"docker compose build: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Build failed: {result.stderr.strip()}")
+        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 2 (build) failed:\n{result.stderr.strip()}", recipients)
         return
 
     # Step 3: Deploy to test environment
@@ -56,8 +95,9 @@ def run_pipeline(branch):
     logging.info(f"Test deploy: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Test deploy failed: {result.stderr.strip()}")
+        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 3 (test deploy) failed:\n{result.stderr.strip()}", recipients)
         return
-    
+
     # Wait for containers to finish booting
     time.sleep(5)
 
@@ -66,26 +106,21 @@ def run_pipeline(branch):
         ['python', f'{REPO_DIR}/tests/test_health.py'],
         capture_output=True, text=True
     )
-    
     logging.info(f"Tests: {result.stdout.strip()}")
-    
-    # On success/failure, we cleanup the test environment
     if result.returncode != 0:
         logging.error(f"Tests failed: {result.stderr.strip()}")
+        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 4 (tests) failed:\n{result.stdout.strip()}", recipients)
         cleanup_test_env()
         return
 
     cleanup_test_env()
 
-
-
-    
-    # Step 5: Deploy to production
+    # Step 5: Deploy to production (only from main)
     if branch != 'main':
-      logging.info(f"Branch '{branch}' is not 'main' - skipping production deploy")
-      logging.info("Pipeline finished successfully")
-      return
-    
+        logging.info(f"Branch '{branch}' is not 'main' - skipping production deploy")
+        logging.info("Pipeline finished successfully")
+        send_email(f"[SUCCESS] Pipeline passed on {branch}", f"All tests passed on branch '{branch}'. Production deploy skipped (not main).", recipients)
+        return
 
     result = subprocess.run(
         ['docker', 'compose', '-p', 'gan-shmuel', 'up', '-d', '--no-deps', 'billing', 'weight'],
@@ -94,9 +129,11 @@ def run_pipeline(branch):
     logging.info(f"Production deploy: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Production deploy failed: {result.stderr.strip()}")
+        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 5 (prod deploy) failed:\n{result.stderr.strip()}", recipients)
         return
 
     logging.info("Pipeline finished successfully")
+    send_email(f"[SUCCESS] Pipeline passed on {branch}", "All steps completed. Production deployed successfully.", recipients)
 
 @app.route('/health', methods=['GET'])
 def health():
