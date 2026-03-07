@@ -8,6 +8,8 @@ services:
       - .:/repo
     environment:
       - REPO_DIR=/repo
+    env_file:
+      - .env
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
