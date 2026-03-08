@@ -5,6 +5,8 @@ services:
     build: .
     ports:
       - "5001:5001"
+    volumes:
+    - ./in:/app/in
     depends_on:
       billing-db:
         condition: service_healthy
