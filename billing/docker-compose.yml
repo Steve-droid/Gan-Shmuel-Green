@@ -15,7 +15,10 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
-
+      WEIGHT_SERVICE_URL: http://weight-app:5000
+    networks:
+      - billing-net
+      - gan-shmuel-net
 
   billing-db:
     image: mysql:8.0
@@ -29,3 +32,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - billing-net
+
+networks:
+  billing-net:
+  gan-shmuel-net:
+    external: true
