@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Gan Shmuel — System Status</title>
+  <style>
+    body { font-family: sans-serif; background: #f4f4f4; padding: 2rem; }
+    h1 { color: #333; }
+    table { border-collapse: collapse; width: 100%; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    th { background: #333; color: white; padding: 0.75rem 1rem; text-align: left; }
+    td { padding: 0.75rem 1rem; border-bottom: 1px solid #eee; }
+    .running { color: green; font-weight: bold; }
+    .exited  { color: red;   font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>System Status</h1>
+  <table>
+    <tr>
+      <th>Container</th>
+      <th>Image</th>
+      <th>Status</th>
+      <th>Ports</th>
+    </tr>
+    {% for c in containers %}
+    <tr>
+      <td>{{ c.name }}</td>
+      <td>{{ c.image }}</td>
+      <td class="{{ c.status }}">{{ c.status }}</td>
+      <td>{{ c.ports }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</body>
+</html>
