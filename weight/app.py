@@ -5,6 +5,9 @@ from typing import List, Optional, Literal
 import uuid
 from datetime import datetime, timezone
 from typing import Literal
+import os
+import csv
+import json as json_module
 from db import (
     get_db,
     test_connection,
@@ -13,6 +16,7 @@ from db import (
     get_last_transaction_for_truck,
     get_last_open_in_for_truck,
     get_containers_tara,
+    upsert_containers,
     get_item_type,
     get_container_tara_kg,
     get_truck_last_tara_kg,
@@ -20,7 +24,7 @@ from db import (
     get_sessions_for_container,
     
 )
-from entity_models import Transaction
+from entity_models import Transaction, Container
 
 app = Flask(__name__)
 
@@ -154,6 +158,7 @@ def post_weight():
             )
 
             tx_id = insert_transaction(new_tx)
+            update_transaction(tx_id, {'sessionId': tx_id})
             return jsonify({
                 'id': tx_id,
                 'truck': truck,
@@ -386,21 +391,70 @@ def get_session(id):
         conn.close()
 
 
+IN_FOLDER = os.environ['IN_FOLDER']
+
+
+def _parse_batch_file(filepath: str) -> list[Container]:
+    """Parse a batch file and return a list of Container objects."""
+    ext = os.path.splitext(filepath)[1].lower()
+
+    if ext == ".json":
+        with open(filepath, "r") as f:
+            rows = json_module.load(f)
+        if not isinstance(rows, list):
+            raise ValueError("JSON file must contain a top-level array")
+        result = []
+        for row in rows:
+            if "id" not in row or "weight" not in row or "unit" not in row:
+                raise ValueError(f"JSON row missing fields: {row}")
+            unit = str(row["unit"]).lower().strip()
+            if unit not in ("kg", "lbs"):
+                raise ValueError(f"Invalid unit '{unit}' in row: {row}")
+            result.append(Container(container_id=str(row["id"]), weight=int(row["weight"]), unit=unit))
+        return result
+
+    elif ext == ".csv":
+        result = []
+        with open(filepath, "r", newline="") as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            if header is None:
+                return []
+            if len(header) < 2:
+                raise ValueError("CSV must have at least 2 columns: id and unit (kg/lbs)")
+            unit = header[1].strip().lower()
+            if unit not in ("kg", "lbs"):
+                raise ValueError(f"CSV second column header must be 'kg' or 'lbs', got '{header[1]}'")
+            for row in reader:
+                if len(row) < 2 or not row[0].strip():
+                    continue
+                result.append(Container(container_id=row[0].strip(), weight=int(row[1].strip()), unit=unit))
+        return result
+
+    else:
+        raise ValueError(f"Unsupported file format '{ext}'. Use .csv or .json")
+
+
 @app.post('/batch-weight')
 def post_batch_weight():
-    """Upload batch weights from file"""
-    
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
-    
-    file = request.files['file']
-    
-    # TODO: Implement logic
-    # - Parse CSV or JSON
-    # - Extract container_id, weight, unit
-    # - Store in `containers_registered` table
-    
-    return jsonify({'status': 'uploaded'}), 201
+    """Upload batch container tara weights from a file in /in folder"""
+    data = request.get_json(silent=True) or {}
+    filename = data.get("file") or request.form.get("file")
+
+    if not filename:
+        return jsonify({"error": "Missing 'file' parameter"}), 400
+
+    filepath = os.path.join(IN_FOLDER, filename) #might need to change when we change to volume?
+    if not os.path.exists(filepath):
+        return jsonify({"error": f"File '{filename}' not found in /in folder"}), 404
+
+    try:
+        rows = _parse_batch_file(filepath)
+    except (ValueError, KeyError) as e:
+        return jsonify({"error": f"Failed to parse file: {e}"}), 400
+
+    upsert_containers(rows)
+    return jsonify({"message": f"Loaded {len(rows)} containers"}), 201
 
 
 @app.get('/unknown')
