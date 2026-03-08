@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify                                                                                                                                                         
+from flask import Flask, render_template, request, jsonify                                                                                                                                                         
 import subprocess                                                                                                                                                                                 
 import threading                                                                                                                                                                                  
 import os                                                                                                                                                                                         
@@ -7,6 +7,7 @@ import time
 import smtplib                                                                
 from email.mime.text import MIMEText
 from auth import authenticate
+import docker as docker_sdk
 
 #extract configuration from environment variables, with defaults.
 #CI_PORT and CI_HOST are set in /etc/ci/ci.env, and loaded by systemd when starting the service.
@@ -141,6 +142,28 @@ def run_pipeline(branch):
 
     logging.info("Pipeline finished successfully")
     send_email(f"[SUCCESS] Pipeline passed on {branch}", "All steps completed. Production deployed successfully.", recipients)
+
+
+
+@app.route('/status', methods=['GET'])
+def status():
+    client = docker_sdk.from_env()
+    containers = client.containers.list(all=True)
+    container_data = []
+    for c in containers:
+        ports = ', '.join([
+        f"{v[0]['HostPort']}→{k.split('/')[0]}"
+        for k, v in (c.ports or {}).items() if v
+        ])
+        container_data.append({
+        'name': c.name,
+        'status': c.status,
+        'image': c.image.tags[0] if c.image.tags else c.short_id,
+        'ports': ports or '—',
+        })
+    return render_template('status.html', containers=container_data)
+    
+
 
 @app.route('/health', methods=['GET'])
 def health():
