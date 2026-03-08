@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 from app.db import get_db_connection
+import requests
 
 truck_bp = Blueprint('truck', __name__)
 
@@ -38,5 +39,41 @@ def put_truck(id):
         con.commit()
         con.close()
         return jsonify({"id": id}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@truck_bp.route('/truck/<id>', methods=['GET'])
+def get_truck(id):
+    try:
+        from_time = request.args.get('from')
+        to_time = request.args.get('to')
+
+        con = get_db_connection()
+        cursor = con.cursor()
+        cursor.execute(
+            "SELECT id FROM Trucks WHERE id = %s", (id,)
+        )
+        truck = cursor.fetchone()
+        con.close()
+
+        if not truck:
+            return jsonify({"error": "Truck not found"}), 404
+        
+        weight_url = f"http://weight-service:5000/item/{id}"
+        params = {}
+        if from_time:
+            params['from'] = from_time
+        if to_time:
+            params['to'] = to_time
+        
+        weight_response = requests.get(weight_url, params=params)
+        weight_data = weight_response.json()
+
+        return jsonify({
+            "id": id,
+            "tara": weight_data.get("tara", "na"),
+            "sessions": weight_data.get("sessions", [])
+        }), 200
+    
     except Exception as e:
         return jsonify({"error": str(e)}), 500
