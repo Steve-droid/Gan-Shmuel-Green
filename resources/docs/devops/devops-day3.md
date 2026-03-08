@@ -10,7 +10,6 @@
 - BONUS: Rollback functionality
 
 ---
-
 ## Task split: Steve and Sami
 
 | Task | Owner |
