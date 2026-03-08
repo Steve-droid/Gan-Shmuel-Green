@@ -6,6 +6,7 @@ __pycache__/
 *.pyo
 *.pyd
 .env
+billing/in/
 
 # OS
 .DS_Store
