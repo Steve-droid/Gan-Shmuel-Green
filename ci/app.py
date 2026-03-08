@@ -158,7 +158,7 @@ def status():
         container_data.append({
         'name': c.name,
         'status': c.status,
-        'image': c.image.tags[0] if c.image.tags else c.short_id,
+        'image': c.attrs['Config']['Image'],
         'ports': ports or '—',
         })
     return render_template('status.html', containers=container_data)
