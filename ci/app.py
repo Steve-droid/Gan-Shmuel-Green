@@ -26,6 +26,7 @@ REPO_DIR = os.environ.get('REPO_DIR', '/repo')
 EMAIL_FROM = os.environ.get('GMAIL_USER')
 EMAIL_TO = os.environ.get('NOTIFY_ALL', EMAIL_FROM)
 EMAIL_PASSWORD = os.environ.get('GMAIL_PASSWORD')
+ALLOWED_BRANCHES = {'main', 'billing', 'weight'}
 
 def send_email(subject, body, recipients):
     if not EMAIL_FROM or not EMAIL_PASSWORD or not recipients:
@@ -73,7 +74,7 @@ def run_pipeline(branch):
     # Step 1: Update repo
     git_commands = [
         ['git', 'fetch', 'origin', branch],
-        ['git', 'checkout', '-B', f'origin/{branch}'],
+        ['git', 'checkout', '-B', branch, f'origin/{branch}'],
         ['git', 'reset', '--hard', f'origin/{branch}'],
     ]
     for cmd in git_commands:
@@ -193,6 +194,9 @@ def trigger():
     payload = request.get_json(silent=True) or {}
     ref = payload.get('ref', 'refs/heads/main')
     branch = ref.split('/')[-1]
+
+    if branch not in ALLOWED_BRANCHES:
+        return jsonify({"status": "ignored", "reason": f"branch '{branch}' is not a monitored branch"}), 200
 
     if payload.get('action') == 'deleted':
         return jsonify({"status": "ignored", "reason": "branch deleted"}), 200
