@@ -459,14 +459,55 @@ def post_batch_weight():
 
 @app.get('/unknown')
 def get_unknown():
-    """Get containers with unknown weight"""
-    
-    # TODO: Implement logic
-    # - Query `containers_registered` for missing container IDs
-    # - Cross-reference with `transactions.containers`
-    # - Return array of container ids
-    
-    return jsonify([]), 200
+    """
+    Returns a list of container IDs that have appeared in transactions 
+    but do not have a registered weight in the system.
+    """
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        
+        # 1. Fetch all 'seen' containers from transactions
+        # We only need the 'containers' column
+        cursor.execute("SELECT containers FROM transactions")
+        transaction_rows = cursor.fetchall()
+        
+        # 2. Fetch all 'known' container IDs from registration
+        # In your DB, the table name is 'containers_registered'
+        cursor.execute("SELECT id FROM containers_registered")
+        registered_rows = cursor.fetchall()
+
+        # 3. Create a set of Known IDs (the 'Registry')
+        # We strip and uppercase to handle any messy manual entries
+        registered_ids = {row[0].strip().upper() for row in registered_rows if row[0]}
+        
+        # 4. Create a set of Seen IDs (from the scale)
+        seen_ids = set()
+        for row in transaction_rows:
+            # Skip empty rows (Edge Case: Scale record with no containers)
+            if row[0]:
+                # Split the string (e.g., "C-1,C-2") and clean each ID
+                parts = row[0].split(',')
+                for p in parts:
+                    clean_id = p.strip().upper()
+                    if clean_id: # Avoid adding empty strings if someone typed "C-1, ,C-2"
+                        seen_ids.add(clean_id)
+        
+        # 5. Logic: Find IDs in 'Seen' that are NOT in 'Registered'
+        unknown_diff = seen_ids - registered_ids
+        
+        # 6. Return as a clean JSON list
+        # We convert the set back to a sorted list for consistent output
+        return jsonify(sorted(list(unknown_diff))), 200
+
+    except Exception as e:
+        # DevOps/Backend safety: Always log or return the error so we aren't flying blind
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+        
+    finally:
+        # Closing the 'tap' to prevent memory leaks and database hanging
+        cursor.close()
+        conn.close()
 
 
 @app.get('/item/<item_id>')
