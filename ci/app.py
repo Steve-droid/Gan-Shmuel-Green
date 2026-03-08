@@ -161,8 +161,19 @@ def status():
         'image': c.attrs['Config']['Image'],
         'ports': ports or '—',
         })
-    return render_template('status.html', containers=container_data)
-    
+    try:
+        container=client.containers.get('gan-shmuel-green-ci-1')
+        ci_logs= container.logs(tail=200).decode('utf-8').strip() or "No logs"
+    except subprocess.CalledProcessError as e:
+        ci_logs= f"Failed to get CI logs: {e.stderr.strip()}"
+    except Exception as e:
+        ci_logs= f"Error getting CI logs: {str(e)}" 
+    logging.info(f"CI logs: {ci_logs}")    
+    return render_template(
+        'status.html',
+        containers=container_data,
+        ci_logs=ci_logs
+    )
 
 
 @app.route('/health', methods=['GET'])
