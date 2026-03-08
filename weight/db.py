@@ -5,7 +5,10 @@ from dotenv import load_dotenv
 from mysql.connector import Error
 from entity_models import Container, Transaction
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional ,Literal
+
+
+ItemType = Literal["truck", "container"]
 
 load_dotenv()  # loads .env into os.environ (skips vars already set in environment)
 
@@ -230,6 +233,134 @@ def get_last_open_in_for_truck(truck: str) -> Optional[Transaction]:
     if result and result['cnt'] == 0:
         return Transaction.from_db_row(last_in)
     return None
+
+
+def get_item_type(item_id: str) -> Optional[ItemType]:
+    """Return 'container' if exists in containers_registered, 'truck' if exists in transactions.truck, else None."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+
+    # 1) container?
+    cursor.execute(
+        "SELECT 1 FROM containers_registered WHERE container_id = %s LIMIT 1",
+        (item_id,)
+    )
+    if cursor.fetchone():
+        cursor.close()
+        conn.close()
+        return "container"
+
+    # 2) truck?
+    cursor.execute(
+        "SELECT 1 FROM transactions WHERE truck = %s LIMIT 1",
+        (item_id,)
+    )
+    if cursor.fetchone():
+        cursor.close()
+        conn.close()
+        return "truck"
+
+    cursor.close()
+    conn.close()
+    return None
+
+
+def get_container_tara_kg(container_id: str) -> Optional[int]:
+    """Return container tara in KG, or None if unknown / not registered."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT weight, unit FROM containers_registered WHERE container_id = %s LIMIT 1",
+        (container_id,)
+    )
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not row:
+        return None
+    if row["weight"] is None:
+        return None
+
+    w = int(row["weight"])
+    unit = (row.get("unit") or "kg").lower()
+    if unit == "lbs":
+        w = int(round(w * 0.45359237))
+    return w
+
+
+def get_truck_last_tara_kg(truck_id: str) -> Optional[int]:
+    """Return last known truck tara (truckTara) in KG from latest row that has it."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT truckTara
+        FROM transactions
+        WHERE truck = %s AND truckTara IS NOT NULL
+        ORDER BY datetime DESC, id DESC
+        LIMIT 1
+        """,
+        (truck_id,)
+    )
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not row or row["truckTara"] is None:
+        return None
+    return int(row["truckTara"])
+
+
+def get_sessions_for_truck(truck_id: str, t1: str, t2: str) -> List[int]:
+    """Return unique sessionIds for a truck in a datetime range."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT DISTINCT sessionId
+        FROM transactions
+        WHERE truck = %s AND datetime BETWEEN %s AND %s AND sessionId IS NOT NULL
+        ORDER BY sessionId
+        """,
+        (truck_id, t1, t2)
+    )
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return [int(r["sessionId"]) for r in rows if r.get("sessionId") is not None]
+
+
+def get_sessions_for_container(container_id: str, t1: str, t2: str) -> List[int]:
+    """Return unique sessionIds for a container in a datetime range (containers stored as CSV string)."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+
+    # Match CSV safely: start/middle/end
+    # containers = "C1,C2" so we check:
+    #   'C1,%' OR '%,C1,%' OR '%,C1' OR exactly 'C1'
+    cursor.execute(
+        """
+        SELECT DISTINCT sessionId
+        FROM transactions
+        WHERE datetime BETWEEN %s AND %s
+          AND sessionId IS NOT NULL
+          AND (
+                containers = %s
+             OR containers LIKE CONCAT(%s, ',%%')
+             OR containers LIKE CONCAT('%%,', %s, ',%%')
+             OR containers LIKE CONCAT('%%,', %s)
+          )
+        ORDER BY sessionId
+        """,
+        (t1, t2, container_id, container_id, container_id, container_id)
+    )
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return [int(r["sessionId"]) for r in rows if r.get("sessionId") is not None]
+
+
 
 if __name__ == '__main__':
     init_db()

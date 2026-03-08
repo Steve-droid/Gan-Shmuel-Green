@@ -17,6 +17,12 @@ from db import (
     get_last_open_in_for_truck,
     get_containers_tara,
     upsert_containers,
+    get_item_type,
+    get_container_tara_kg,
+    get_truck_last_tara_kg,
+    get_sessions_for_truck,
+    get_sessions_for_container,
+    
 )
 from entity_models import Transaction, Container
 
@@ -91,41 +97,7 @@ def post_weight():
     containers_csv = ",".join(containers_list)
 
     now = datetime.now(timezone.utc)  
-    #return the most recent version of the truck
-    def last_tx_for_truck():
-        if truck == "na":
-            return None
-        return (
-            transactions.query
-            .filter_by(truck=truck)
-            .order_by(transactions.datetime.desc(), transactions.id.desc())
-            .first()
-        )
-    
-    #Returns the truck's last IN, only if it is still "open".
-    def last_open_in_for_truck():
-        if truck == "na":
-            return None
 
-        last_in = (
-            transactions.query
-            .filter_by(truck=truck, direction="in")
-            .order_by(transactions.datetime.desc(), transactions.id.desc())
-            .first()
-        )
-        if not last_in:
-            return None
-
-        out_exists = (
-            transactions.query
-            .filter_by(truck=truck, direction="out", session_id=last_in.session_id)
-            .first()
-        )
-        if out_exists:
-            return None
-        return last_in
-    
-    
 
     def validate_session_constraints(direction, open_in, last_tx, force):
         #none after in not allowed
@@ -312,7 +284,12 @@ def get_weights():
         placeholders = ', '.join(['%s'] * len(f_list))
 
         # 3. Build the query with the dynamic placeholders
-        query = f"SELECT id, truck, bruto, truckTara, neto, datetime FROM transactions WHERE datetime BETWEEN %s AND %s AND direction IN ({placeholders})"
+        query = f"""
+            SELECT id, direction, bruto, neto, produce, containers 
+            FROM transactions 
+            WHERE datetime BETWEEN %s AND %s 
+            AND direction IN ({placeholders})
+        """
         
         # 4. Flatten all arguments into one tuple: (t1, t2, 'in', 'out'...)
         params = [t1, t2] + f_list
@@ -325,40 +302,93 @@ def get_weights():
                 "message": f"No weighing sessions exist for the requested time range ({t1} to {t2})"
             }), 200
 
+        # --- THE MODIFICATION: FORMATTING EACH OBJECT ---
+        formatted_response = []
+        for row in results:
+            formatted_response.append({
+                "id": row["id"],
+                "direction": row["direction"],
+                "bruto": row["bruto"], # Assumed stored as KG
+                # Handle "na" for neto if tara was unknown (NULL in DB)
+                "neto": row["neto"] if row["neto"] is not None else "na",
+                "produce": row["produce"],
+                # Convert "c1,c2" string into list ["c1", "c2"]
+                "containers": row["containers"].split(",") if row["containers"] else []
+            })
+
         cursor.close()
         conn.close()
-        return jsonify(results), 200
+        return jsonify(formatted_response), 200
 
     except Exception as e:
         print(f"DEBUG ERROR: {e}")
         return jsonify({"error": "Internal database error"}), 500
-    
-    # 6. Transform raw database rows into a list of dictionaries 
-    results = []
-    for row in rows:
-        record = {
-            "id": row[0],
-            "truck": row[1],
-            "bruto": row[2],
-            "truckTara": row[3] or 0,  # Use 0 if the value is NULL/None
-            "neto": row[4] or 0,       # Use 0 if the truck hasn't left yet
-            "datetime": row[5]
+
+
+@app.get('/session/<id>')
+def get_session(id):
+    conn = get_db()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Ensure your query explicitly asks for all needed columns
+        cursor.execute("SELECT * FROM transactions WHERE id=%s", (id,))
+        row = cursor.fetchone()
+
+        if not row:
+            return jsonify({
+                "status": "error",
+                "message": f"Session ID {id} was not found."
+            }), 404
+
+        # 1. Build the Base Response safely
+        response_data = {
+            "id": row.get('id'),
+            "truck": row.get('truck') if row.get('truck') else "na",
+            "bruto": row.get('bruto'),
+            # Safely handle datetime objects
+            "datetime": row['datetime'].strftime("%a, %d %b %Y %H:%M:%S GMT") if row.get('datetime') else "na"
         }
-        results.append(record)
 
-    # 7. Send the final JSON response to the user 📤
-    return jsonify(results), 200
+        # 2. Logic for 'OUT' Sessions
+        if row.get('direction') == "out":
+            tara = row.get('truckTara')
+            
+            # Check for missing/zero Tara
+            if not tara or tara == 0:
+                response_data.update({"truckTara": "na", "neto": "na"})
+                return jsonify(response_data), 200
 
+            # 3. Process Containers safely
+            # Using .get('containers') avoids the KeyError if the key is missing
+            container_str = str(row.get('containers')) if row.get('containers') else ""
+            container_ids = [c.strip() for c in container_str.split(",") if c.strip()]
+            
+            total_container_weight = 0
+            all_weights_known = True
 
-@app.get('/session/<session_id>')
-def get_session(session_id):
-    """Get session details"""
-    
-    # TODO: Implement logic
-    # - Query `transactions` table for session
-    # - Return session with bruto/neto/truckTara
-    
-    return jsonify({'id': session_id}), 200
+            for c_id in container_ids:
+                cursor.execute("SELECT weight FROM containers_registered WHERE container_id=%s", (c_id,))
+                c_row = cursor.fetchone()
+                
+                if c_row and c_row.get('weight') is not None:
+                    total_container_weight += c_row['weight']
+                else:
+                    all_weights_known = False
+                    break
+            
+            if all_weights_known:
+                response_data["neto"] = (row.get('bruto') or 0) - tara - total_container_weight
+            else:
+                response_data["neto"] = "na"
+                
+            response_data["truckTara"] = tara
+
+        return jsonify(response_data), 200
+
+    finally:
+        cursor.close()
+        conn.close()
 
 
 IN_FOLDER = os.environ['IN_FOLDER']
@@ -441,15 +471,40 @@ def get_unknown():
 
 @app.get('/item/<item_id>')
 def get_item(item_id):
-    """Get item (truck or container) details"""
-    from_dt = request.args.get('from')
-    to_dt = request.args.get('to')
-    
-    # TODO: Implement logic
-    # - Query `transactions` and `containers_registered` tables
-    # - Return tara and sessions
-    
-    return jsonify({'id': item_id, 'tara': None, 'sessions': []}), 200
+    now = datetime.now()
+    default_t2 = now.strftime('%Y%m%d%H%M%S')
+    default_t1 = now.strftime('%Y%m') + '01000000'  # 1st of month 00:00:00
+
+    t1 = request.args.get('from', default_t1)
+    t2 = request.args.get('to', default_t2)
+
+    # validate format
+    try:
+        t1_dt = datetime.strptime(t1, '%Y%m%d%H%M%S')
+        t2_dt = datetime.strptime(t2, '%Y%m%d%H%M%S')
+    except ValueError:
+        return jsonify({"error": "Invalid date format. Please use yyyymmddhhmmss"}), 400
+
+    if t1_dt > t2_dt:
+        return jsonify({"error": "Invalid range: 'from' date cannot be later than 'to' date"}), 400
+
+    # decide item type (truck/container) or 404
+    item_type = get_item_type(item_id)
+    if item_type is None:
+        return jsonify({"error": "Item not found"}), 404
+
+    if item_type == "container":
+        tara = get_container_tara_kg(item_id)
+        sessions = get_sessions_for_container(item_id, t1, t2)
+    else:  # truck
+        tara = get_truck_last_tara_kg(item_id)
+        sessions = get_sessions_for_truck(item_id, t1, t2)
+
+    return jsonify({
+        "id": item_id,
+        "tara": tara if tara is not None else "na",
+        "sessions": sessions
+    }), 200
 
 
 @app.get('/health')
@@ -460,6 +515,9 @@ def health_check():
         return jsonify({'status': 'OK'}), 200
     else:
         return jsonify({'status': 'Failure'}), 500
+    
+
+
 
 
 if __name__ == '__main__':
