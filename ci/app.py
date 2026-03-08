@@ -6,6 +6,13 @@ import logging
 import time
 import smtplib                                                                
 from email.mime.text import MIMEText
+from auth import authenticate
+
+#extract configuration from environment variables, with defaults.
+#CI_PORT and CI_HOST are set in /etc/ci/ci.env, and loaded by systemd when starting the service.
+CI_PORT=os.environ.get('CI_PORT', '8085') 
+CI_HOST=os.environ.get('CI_HOST', '0.0.0.0')
+
 
 # Configure the global logging system
 logging.basicConfig(
@@ -142,6 +149,12 @@ def health():
 
 @app.route('/trigger', methods=['POST'])
 def trigger():
+    
+    if not authenticate(request):
+        logging.info("Authentication failed for incoming request")
+        return jsonify({"status": "error", "reason": "authentication failed"}), 401
+    logging.info("Authentication successful for incoming request")
+    
     event = request.headers.get('X-GitHub-Event', '')
     if event != 'push':
         return jsonify({"status": "ignored", "reason": f"event '{event}' is not a push"}), 200
@@ -157,4 +170,4 @@ def trigger():
     return jsonify({"status": "triggered", "branch": branch}), 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8085)
+    app.run(host=CI_HOST, port=int(CI_PORT))
