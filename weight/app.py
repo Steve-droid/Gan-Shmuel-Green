@@ -30,6 +30,7 @@ app = Flask(__name__)
 
 Direction = Literal["in", "out", "none"]
 LBS_TO_KG = 0.45359237
+IN_FOLDER = os.getenv("IN_FOLDER", "/app/in")
 
 #check if kg / lbs if lbs convert to kg
 def to_kg_int(weight: int, unit: str) -> int:
