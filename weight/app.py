@@ -328,70 +328,58 @@ def get_weights():
 @app.get('/session/<id>')
 def get_session(id):
     conn = get_db()
-    try:
-        cursor = conn.cursor(dictionary=True)
-        
-        # Ensure your query explicitly asks for all needed columns
-        cursor.execute("SELECT * FROM transactions WHERE id=%s", (id,))
-        row = cursor.fetchone()
+    cursor = conn.cursor(dictionary=True)
 
-        if not row:
+    try:
+        # מביאים את כל הרשומות של אותו session
+        cursor.execute("""
+            SELECT *
+            FROM transactions
+            WHERE sessionId = %s
+            ORDER BY datetime ASC, id ASC
+        """, (id,))
+        rows = cursor.fetchall()
+
+        if not rows:
             return jsonify({
                 "status": "error",
                 "message": f"Session ID {id} was not found."
             }), 404
 
-        # 1. Build the Base Response safely
+        in_row = None
+        out_row = None
+
+        for row in rows:
+            if row.get("direction") == "in" and in_row is None:
+                in_row = row
+            elif row.get("direction") == "out" and out_row is None:
+                out_row = row
+
+        # אם אין in ניקח את הרשומה הראשונה כבסיס
+        base_row = in_row if in_row else rows[0]
+
         response_data = {
-            "id": row.get('id'),
-            "truck": row.get('truck') if row.get('truck') else "na",
-            "bruto": row.get('bruto'),
-            # Safely handle datetime objects
-            "datetime": row['datetime'].strftime("%a, %d %b %Y %H:%M:%S GMT") if row.get('datetime') else "na"
+            "id": base_row.get("sessionId"),
+            "truck": base_row.get("truck") or "na",
+            "bruto": base_row.get("bruto"),
+            "produce": base_row.get("produce") or "na"
         }
 
-        # 2. Logic for 'OUT' Sessions
-        if row.get('direction') == "out":
-            tara = row.get('truckTara')
-            
-            # Check for missing/zero Tara
-            if not tara or tara == 0:
-                response_data.update({"truckTara": "na", "neto": "na"})
-                return jsonify(response_data), 200
+        # אם יש OUT, נוסיף גם את המידע שלו
+        if out_row:
+            response_data["truckTara"] = out_row.get("truckTara")
 
-            # 3. Process Containers safely
-            # Using .get('containers') avoids the KeyError if the key is missing
-            container_str = str(row.get('containers')) if row.get('containers') else ""
-            container_ids = [c.strip() for c in container_str.split(",") if c.strip()]
-            
-            total_container_weight = 0
-            all_weights_known = True
-
-            for c_id in container_ids:
-                cursor.execute("SELECT weight FROM containers_registered WHERE container_id=%s", (c_id,))
-                c_row = cursor.fetchone()
-                
-                if c_row and c_row.get('weight') is not None:
-                    total_container_weight += c_row['weight']
-                else:
-                    all_weights_known = False
-                    break
-            
-            if all_weights_known:
-                response_data["neto"] = (row.get('bruto') or 0) - tara - total_container_weight
-            else:
+            if out_row.get("neto") is None:
                 response_data["neto"] = "na"
-                
-            response_data["truckTara"] = tara
+            else:
+                response_data["neto"] = out_row.get("neto")
+
 
         return jsonify(response_data), 200
 
     finally:
         cursor.close()
         conn.close()
-
-
-IN_FOLDER = os.environ['IN_FOLDER']
 
 
 def _parse_batch_file(filepath: str) -> list[Container]:
