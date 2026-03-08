@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 from app.db import get_db_connection
 import requests
+import os
 
 truck_bp = Blueprint('truck', __name__)
 
@@ -59,7 +60,7 @@ def get_truck(id):
         if not truck:
             return jsonify({"error": "Truck not found"}), 404
         
-        weight_url = f"http://weight-service:5000/item/{id}"
+        weight_url = f"{os.environ.get('WEIGHT_SERVICE_URL', 'http://weight-app:5000')}/item/{id}"
         params = {}
         if from_time:
             params['from'] = from_time
