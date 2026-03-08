@@ -127,7 +127,6 @@ def run_pipeline(branch):
     if branch != 'main':
         logging.info(f"Branch '{branch}' is not 'main' - skipping production deploy")
         logging.info("Pipeline finished successfully")
-        send_email(f"[SUCCESS] Pipeline passed on {branch}", f"All tests passed on branch '{branch}'. Production deploy skipped (not main).", recipients)
         return
 
     result = subprocess.run(
@@ -141,7 +140,6 @@ def run_pipeline(branch):
         return
 
     logging.info("Pipeline finished successfully")
-    send_email(f"[SUCCESS] Pipeline passed on {branch}", "All steps completed. Production deployed successfully.", recipients)
 
 
 
