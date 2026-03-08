@@ -73,7 +73,7 @@ def run_pipeline(branch):
     # Step 1: Update repo
     git_commands = [
         ['git', 'fetch', 'origin', branch],
-        ['git', 'checkout', branch],
+        ['git', 'checkout', '-B', f'origin/{branch}'],
         ['git', 'reset', '--hard', f'origin/{branch}'],
     ]
     for cmd in git_commands:
