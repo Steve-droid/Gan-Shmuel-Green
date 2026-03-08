@@ -880,17 +880,56 @@ def send_email(subject, body, recipients):
 
 ---
 
-### Deploying the new pipeline to EC2
+## Day 2 Status — COMPLETE
 
-The EC2 server still has the old CI image from Day 1. To update it:
+All subtasks finished and tested locally. Both feature branches merged into `devops` via PRs:
+- `devops-test-env` → `devops`
+- `devops-mailing` → `devops`
 
-1. Merge `devops-test-env` → `devops` via PR
-2. SSH into EC2 and pull the `devops` branch
-3. Rebuild the CI container:
-   ```bash
-   sudo docker compose up -d --build ci
-   ```
-4. From that point, every GitHub push fires the full new pipeline automatically via the webhook.
+---
+
+## Deploying to EC2
+
+The EC2 server needs to be updated manually after the `devops` branch is ready. Steps:
+
+### 1. SSH into EC2
+```bash
+ssh -i <key.pem> ubuntu@3.108.241.170
+```
+
+### 2. Pull the latest `devops` branch
+```bash
+cd ~/Gan-Shmuel-Green
+git fetch origin
+git checkout devops
+git reset --hard origin/devops
+sudo chown -R ubuntu:ubuntu ~/Gan-Shmuel-Green
+```
+
+### 3. Create `.env` on EC2
+The `.env` file is gitignored and must be created manually on the server:
+```
+MYSQL_ROOT_PASSWORD=<password>
+GMAIL_USER=ganshmuelci@gmail.com
+GMAIL_PASSWORD=<app-password>
+NOTIFY_ALL=<all team emails comma-separated>
+NOTIFY_DEVOPS=<devops team emails>
+NOTIFY_WEIGHT=<weight team emails>
+NOTIFY_BILLING=<billing team emails>
+```
+
+### 4. Rebuild the CI container
+```bash
+sudo docker compose up -d --build ci
+sudo chown -R ubuntu:ubuntu ~/Gan-Shmuel-Green
+```
+
+### 5. Verify
+```bash
+curl http://localhost:8085/health
+```
+
+From this point, every GitHub push fires the full pipeline automatically via the webhook — build → test → email notification → (main only) production deploy.
 
 ---
 
