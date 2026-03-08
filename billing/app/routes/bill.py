@@ -22,18 +22,20 @@ def get_bill(id):
         if not provider:
             con.close()
             return jsonify({"error": "Provider not found"}), 404
-        
+
         cursor.execute(
-        "SELECT id FROM Trucks WHERE provider_id = %s", (id,))
+            "SELECT id FROM Trucks WHERE provider_id = %s", (id,))
         trucks = cursor.fetchall()
 
-        cursor.execute("SELECT product_id, rate FROM Rates WHERE provider_id = %s", (id,))
+        cursor.execute("SELECT product_id, rate FROM Rates WHERE scope = %s OR scope = 'ALL'", (id,))
         rates = {row['product_id']: row['rate'] for row in cursor.fetchall()}
 
         con.close()
 
         total = 0
+        session_count = 0
         truck_list = []
+        products_map = {}
         weight_url = os.environ.get("WEIGHT_SERVICE_URL", "http://weight-service:5000")
 
         for truck in trucks:
@@ -48,20 +50,42 @@ def get_bill(id):
                 session_resp = requests.get(f"{weight_url}/session/{session_id}")
                 session_data = session_resp.json()
                 product = session_data.get('produce', 'unknown')
-                neto = session_data.get('neto', 0)
-                if neto != 'na' and product in rates:
-                    total += neto * rates[product]
-                
+                neto = session_data.get('neto', 'na')
+
+                if neto == 'na' or neto is None:
+                    continue
+
+                session_count += 1
+                rate = rates.get(product, 0)
+                pay = neto * rate
+                total += pay
+
+                if product not in products_map:
+                    products_map[product] = {'count': 0, 'amount': 0, 'rate': rate}
+                products_map[product]['count'] += 1
+                products_map[product]['amount'] += neto
+
+        products = [
+            {
+                "product": product,
+                "count": str(data['count']),
+                "amount": data['amount'],
+                "rate": data['rate'],
+                "pay": data['amount'] * data['rate']
+            }
+            for product, data in products_map.items()
+        ]
+
         return jsonify({
-            "id": id,
+            "id": str(id),
             "name": provider['name'],
             "from": from_time,
             "to": to_time,
             "truckCount": len(truck_list),
-            "trucks": truck_list,
+            "sessionCount": session_count,
+            "products": products,
             "total": total
         }), 200
-    
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-

@@ -14,8 +14,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-    networks:
-      - weight-net
 
   app:
     build: .
@@ -31,20 +29,12 @@ services:
       DB_PORT: 3306
       IN_FOLDER: /app/in
     ports:
-      - "5002:5000"
+      - "5000:5000"
     volumes:
       - ./in:/app/in
     command: >
       sh -c "python -c 'from db import init_db; init_db()' &&
              python app.py"
-    networks:
-      - weight-net
-      - gan-shmuel-net
 
 volumes:
   mysql_data:
-
-networks:
-  weight-net:
-  gan-shmuel-net:
-    external: true
