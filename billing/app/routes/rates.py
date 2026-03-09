@@ -3,6 +3,7 @@ import pandas as pd
 from app.db import get_db_connection
 import os
 from io import BytesIO
+from werkzeug.utils import secure_filename
 
 
 rates_bp = Blueprint("rates", __name__)
@@ -14,12 +15,16 @@ def upload_rates():
     if not filename:
         return jsonify({"error": "file parameter required"}), 400
 
+    filename = secure_filename(filename)
+
     path = f"in/{filename}"
     if not os.path.exists(path):
         return jsonify({"error": "file not found"}), 404
 
-    df = pd.read_excel(path)
-
+    try:
+        df = pd.read_excel(path)
+    except Exception:
+        return jsonify({"error": "invalid excel file"}), 400
     con = get_db_connection()
     cursor = con.cursor()
 
