@@ -1,11 +1,14 @@
 services:
   billing:
+    volumes:
+      - ./resources/sample_files/sample_uploads:/app/in
     build: ./billing
     ports:
-      - "8083:8081"
+      - "8083:5001"
     environment:
       - DB_HOST=billing-db
       - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - WEIGHT_SERVICE_URL=http://weight:5000
     depends_on:
       - billing-db
     restart: unless-stopped
@@ -19,9 +22,11 @@ services:
     restart: unless-stopped
 
   weight:
+    volumes:
+      - ./resources/sample_files/sample_uploads:/app/in 
     build: ./weight
     ports:
-      - "8082:8080"
+      - "8082:5000"
     environment:
       - DB_HOST=weight-db
       - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
