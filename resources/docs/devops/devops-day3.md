@@ -211,11 +211,40 @@ def test_full_weighing_and_billing_flow():
 
 **Note:** The exact request format depends on the final implementation from each team. Verify with billing and weight before writing this.
 
-### Subtask 2b: Update `docker-compose.test.yml` if needed (Steve)
+### Subtask 2b: Update `docker-compose.test.yml` (Steve)
 
-Both services are already on the same Docker network (same compose file = same default network), so they can reach each other by service name internally. No changes likely needed, but verify once the real services replace the stubs.
+Both services are already on the same Docker network — no networking changes needed.
 
-**Owner: Steve**
+However, the volume mounts for `/in` must be added.
+
+**What is `/in`?**
+
+The billing and weight services expect certain files to be placed on their filesystem before specific endpoints can work:
+- `POST /rates` (billing) — reads a rates Excel file from `/in/<filename>` inside the billing container
+- `POST /batch-weight` (weight) — reads a container tara CSV/JSON file from `/in/<filename>` inside the weight container
+
+Neither endpoint accepts the file content directly in the HTTP request. You send just the filename (e.g. `{"file": "rates.xlsx"}`), and the service opens that file from its own `/in` folder.
+
+**Why the volume mount?**
+
+By default `/in` doesn't exist inside the containers. The volume mount maps a directory from the host into the container at `/in`, so the files are available without any manual copying:
+
+```yaml
+services:
+  billing:
+    volumes:
+      - ./resources/sample_files/sample_uploads:/in
+
+  weight:
+    volumes:
+      - ./resources/sample_files/sample_uploads:/in
+```
+
+`./resources/sample_files/sample_uploads` already contains the files needed:
+- `rates.xlsx` — for `POST /rates` on billing
+- `containers1.csv` — for `POST /batch-weight` on weight
+
+This is required for the E2E test: `POST /rates` must succeed before `GET /bill/<id>` can return `total > 0`.
 
 ---
 
@@ -239,6 +268,57 @@ Before each production deploy, tag the current production images with the git co
 ```
 
 This is a bonus task — implement only if time allows after the required tasks are done.
+
+---
+
+## DB schemas and sample files
+
+### Weight DB (`resources/db_schemas/multi-db/weightdb.sql`)
+
+Two tables:
+- `containers_registered` (`container_id` varchar(15), `weight` int, `unit` varchar(10))
+- `transactions` (`id` int auto_increment, `datetime`, `direction`, `truck` varchar(50), `containers`, `bruto` int, `truckTara` int, `neto` int, `produce` varchar(50))
+
+Relevant for tests:
+- `truckTara` and `neto` are only populated for direction=out — direction=in response will not contain them
+- `neto` is NULL (not the string "na") in the DB when containers have unknown tara — the API translates this to "na" in the JSON response
+- Container IDs are varchar(15) — test container IDs must stay within that limit
+
+### Billing DB (`resources/db_schemas/multi-db/billingdb.sql`)
+
+Three tables:
+- `Provider` (`id` int auto_increment, `name` varchar(255))
+- `Rates` (`product_id` varchar(50), `rate` int, `scope` varchar(50))
+- `Trucks` (`id` varchar(10), `provider_id` int)
+
+**Critical:** `Trucks.id` is varchar(10). Any truck license plate used in tests must be ≤ 10 characters. `"TEST-TRUCK-456"` (14 chars) will fail with a DB error. Use `"TST-456"` or similar.
+
+### Sample upload files (`resources/sample_files/sample_uploads/`)
+
+| File | Format | Use |
+|---|---|---|
+| `containers1.csv` | `"id","kg"` — IDs like `C-35434` | `POST /batch-weight` on weight service |
+| `containers2.csv` | `"id","lbs"` — IDs like `K-8263` | `POST /batch-weight` on weight service |
+| `trucks.json` | `[{"id":"T-XXXXX","weight":NNN,"unit":"lbs"}]` | `POST /batch-weight` on weight service |
+| `rates.xlsx` | Excel — columns: Product, Rate, Scope | `POST /rates` on billing service |
+
+`POST /batch-weight` and `POST /rates` both require the file to be in the `/in` folder inside the respective container. To enable these tests without manual steps, add a volume mount to `docker-compose.test.yml`:
+
+```yaml
+services:
+  weight:
+    volumes:
+      - ./resources/sample_files/sample_uploads:/in
+  billing:
+    volumes:
+      - ./resources/sample_files/sample_uploads:/in
+```
+
+Then in tests:
+- `POST /batch-weight` with body `{"file": "containers1.csv"}`
+- `POST /rates` with body `{"file": "rates.xlsx"}`
+
+This also unblocks the E2E test — `POST /rates` must succeed before `GET /bill/<id>` can return `total > 0`.
 
 ---
 
