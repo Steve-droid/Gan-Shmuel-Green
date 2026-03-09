@@ -37,16 +37,11 @@ def update_provider(provider_id: str, new_name: str):
         return False
 
 def get_all_providers():
-    print("Entering get_all_providers", flush=True)
-
+    
     try:
-        print("Entering try", flush=True)
-
         con = get_db_connection()
         cursor = con.cursor()    
         cursor.execute("SELECT id, name FROM Provider")
-        print("ufter", flush=True)
-
         rows = cursor.fetchall()
         con.close()
         return [{"id": r[0], "name": r[1]} for r in rows]
