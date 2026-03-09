@@ -13,14 +13,26 @@
 
 ## Task split: Steve and Sami
 
-| Task | Owner |
-|---|---|
-| Update test runner in pipeline to run all test files | Steve |
-| Create `tests/test_weight.py` — weight API integration tests | Sami |
-| Create `tests/test_billing.py` — billing API integration tests | Sami |
-| Create `tests/test_e2e.py` — full integration flow | Steve |
-| Deploy updated pipeline to EC2 | Steve |
-| BONUS: Rollback functionality | Steve |
+| Task | Owner | Branch |
+|---|---|---|
+| Update test runner in pipeline to run all test files | Steve | `devops-test-runner` → `devops-test` |
+| Create `tests/test_weight.py` — weight API integration tests | Sami | `devops-test-weight` → `devops-test` |
+| Create `tests/test_billing.py` — billing API integration tests | Sami | `devops-test-billing` → `devops-test` |
+| Create `tests/test_e2e.py` — full integration flow | Steve | `devops-e2e-test` → `devops-e2e` |
+| Deploy updated pipeline to EC2 | Steve | — (after merging `devops-test` + `devops-e2e` to `devops`) |
+| BONUS: Rollback functionality | Steve | `devops-rollback` → `devops` |
+
+**Branch hierarchy:**
+```
+devops
+├── devops-test              ← parent for all test runner + integration test work
+│   ├── devops-test-runner   ← subtask 1a (Steve)
+│   ├── devops-test-weight   ← subtask 1b (Sami)
+│   └── devops-test-billing  ← subtask 1c (Sami)
+├── devops-e2e               ← parent for E2E work
+│   └── devops-e2e-test      ← subtask 2a (Steve)
+└── devops-rollback          ← bonus (Steve)
+```
 
 **Why this split:**
 - Sami writes the integration tests for weight and billing separately — each file focuses on one service and its HTTP endpoints, which is a manageable scope
@@ -56,21 +68,23 @@ Unit tests catch logic errors fast. Integration tests catch deployment and wirin
 ```
 Step 1: git update (fetch + checkout + reset)
 Step 2: Build images (docker compose build)
-Step 3: Deploy test environment (docker-compose.test.yml up)
-Step 4a: Sleep(5) — wait for services to boot
-Step 4b: Run unit tests (billing/tests/, weight/tests/) — DB is available
-Step 4c: Run integration tests (tests/) — services are running
+Step 3: Deploy test environment (docker-compose.test.yml up + sleep(5))
+Step 4: Run tests
+         → 4a: Unit tests (billing/tests/, weight/tests/)
+         → 4b: Integration tests (tests/)
 Step 5: Cleanup test environment
 Step 6: (main only) Deploy to production
 ```
 
-Unit tests run after the test environment is up (not before) because the billing/weight teams may make real DB calls in their tests. Since the DB containers are part of the test environment, running everything after Step 3 is the safest approach.
+`sleep(5)` is part of step 3 — it waits for services to finish booting before tests can run. It is not a test step.
+
+Unit tests run after the test environment is up because the billing/weight teams may make real DB calls in their tests. Since the DB containers are part of the test environment, running everything after step 3 is the safest approach.
 
 ---
 
 ## Task 1: Manage testing for dev teams
 
-### Subtask 1a: Restructure the test runner in the pipeline (Steve)
+### Subtask 1a: Restructure the test runner in the pipeline (Steve) — `devops-test-runner`
 
 Currently `run_pipeline()` runs a single file:
 ```python
@@ -82,7 +96,8 @@ This needs to be replaced with two sequential pytest calls — one for unit test
 **Changes needed in `ci/app.py`:**
 
 ```python
-# Step 4b: Run unit tests (billing + weight)
+# Step 4: Run tests
+# Step 4a: Unit tests (billing + weight)
 result = subprocess.run(
     ['python', '-m', 'pytest', 'billing/tests/', 'weight/tests/', '-v'],
     cwd=REPO_DIR, capture_output=True, text=True
@@ -94,7 +109,7 @@ if result.returncode != 0:
     cleanup_test_env()
     return
 
-# Step 4c: Run integration tests (DevOps)
+# Step 4b: Integration tests (DevOps)
 result = subprocess.run(
     ['python', '-m', 'pytest', 'tests/', '-v'],
     cwd=REPO_DIR, capture_output=True, text=True
@@ -110,7 +125,7 @@ if result.returncode != 0:
 **Changes needed in `ci/requirements.txt`:**
 - Add `pytest`
 
-### Subtask 1b: Create `tests/test_weight.py` (Sami)
+### Subtask 1b: Create `tests/test_weight.py` (Sami) — `devops-test-weight`
 
 Integration tests for the weight service. These run against the test container at `host.docker.internal:8082`.
 
@@ -123,7 +138,7 @@ Endpoints to test (from `api-spec-for-all-teams.md`):
 - `GET /unknown` — returns list of containers with unknown tara
 - `POST /batch-weight` — uploads container tara weights from file
 
-### Subtask 1c: Create `tests/test_billing.py` (Sami)
+### Subtask 1c: Create `tests/test_billing.py` (Sami) — `devops-test-billing`
 
 Integration tests for the billing service. These run against the test container at `host.docker.internal:8083`.
 
@@ -158,7 +173,7 @@ E2E tests verify the full system works together as a whole — not just individu
 
 This test crosses the boundary between weight and billing — it only passes if both services are running correctly AND the data flows correctly between them.
 
-### Subtask 2a: Create `tests/test_e2e.py` (Steve)
+### Subtask 2a: Create `tests/test_e2e.py` (Steve) — `devops-e2e-test`
 
 General structure:
 ```python
@@ -196,15 +211,44 @@ def test_full_weighing_and_billing_flow():
 
 **Note:** The exact request format depends on the final implementation from each team. Verify with billing and weight before writing this.
 
-### Subtask 2b: Update `docker-compose.test.yml` if needed (Steve)
+### Subtask 2b: Update `docker-compose.test.yml` (Steve)
 
-Both services are already on the same Docker network (same compose file = same default network), so they can reach each other by service name internally. No changes likely needed, but verify once the real services replace the stubs.
+Both services are already on the same Docker network — no networking changes needed.
 
-**Owner: Steve**
+However, the volume mounts for `/in` must be added.
+
+**What is `/in`?**
+
+The billing and weight services expect certain files to be placed on their filesystem before specific endpoints can work:
+- `POST /rates` (billing) — reads a rates Excel file from `/in/<filename>` inside the billing container
+- `POST /batch-weight` (weight) — reads a container tara CSV/JSON file from `/in/<filename>` inside the weight container
+
+Neither endpoint accepts the file content directly in the HTTP request. You send just the filename (e.g. `{"file": "rates.xlsx"}`), and the service opens that file from its own `/in` folder.
+
+**Why the volume mount?**
+
+By default `/in` doesn't exist inside the containers. The volume mount maps a directory from the host into the container at `/in`, so the files are available without any manual copying:
+
+```yaml
+services:
+  billing:
+    volumes:
+      - ./resources/sample_files/sample_uploads:/in
+
+  weight:
+    volumes:
+      - ./resources/sample_files/sample_uploads:/in
+```
+
+`./resources/sample_files/sample_uploads` already contains the files needed:
+- `rates.xlsx` — for `POST /rates` on billing
+- `containers1.csv` — for `POST /batch-weight` on weight
+
+This is required for the E2E test: `POST /rates` must succeed before `GET /bill/<id>` can return `total > 0`.
 
 ---
 
-## Task 3 (BONUS): Rollback functionality (Steve)
+## Task 3 (BONUS): Rollback functionality (Steve) — `devops-rollback`
 
 ### What this means
 
@@ -224,6 +268,57 @@ Before each production deploy, tag the current production images with the git co
 ```
 
 This is a bonus task — implement only if time allows after the required tasks are done.
+
+---
+
+## DB schemas and sample files
+
+### Weight DB (`resources/db_schemas/multi-db/weightdb.sql`)
+
+Two tables:
+- `containers_registered` (`container_id` varchar(15), `weight` int, `unit` varchar(10))
+- `transactions` (`id` int auto_increment, `datetime`, `direction`, `truck` varchar(50), `containers`, `bruto` int, `truckTara` int, `neto` int, `produce` varchar(50))
+
+Relevant for tests:
+- `truckTara` and `neto` are only populated for direction=out — direction=in response will not contain them
+- `neto` is NULL (not the string "na") in the DB when containers have unknown tara — the API translates this to "na" in the JSON response
+- Container IDs are varchar(15) — test container IDs must stay within that limit
+
+### Billing DB (`resources/db_schemas/multi-db/billingdb.sql`)
+
+Three tables:
+- `Provider` (`id` int auto_increment, `name` varchar(255))
+- `Rates` (`product_id` varchar(50), `rate` int, `scope` varchar(50))
+- `Trucks` (`id` varchar(10), `provider_id` int)
+
+**Critical:** `Trucks.id` is varchar(10). Any truck license plate used in tests must be ≤ 10 characters. `"TEST-TRUCK-456"` (14 chars) will fail with a DB error. Use `"TST-456"` or similar.
+
+### Sample upload files (`resources/sample_files/sample_uploads/`)
+
+| File | Format | Use |
+|---|---|---|
+| `containers1.csv` | `"id","kg"` — IDs like `C-35434` | `POST /batch-weight` on weight service |
+| `containers2.csv` | `"id","lbs"` — IDs like `K-8263` | `POST /batch-weight` on weight service |
+| `trucks.json` | `[{"id":"T-XXXXX","weight":NNN,"unit":"lbs"}]` | `POST /batch-weight` on weight service |
+| `rates.xlsx` | Excel — columns: Product, Rate, Scope | `POST /rates` on billing service |
+
+`POST /batch-weight` and `POST /rates` both require the file to be in the `/in` folder inside the respective container. To enable these tests without manual steps, add a volume mount to `docker-compose.test.yml`:
+
+```yaml
+services:
+  weight:
+    volumes:
+      - ./resources/sample_files/sample_uploads:/in
+  billing:
+    volumes:
+      - ./resources/sample_files/sample_uploads:/in
+```
+
+Then in tests:
+- `POST /batch-weight` with body `{"file": "containers1.csv"}`
+- `POST /rates` with body `{"file": "rates.xlsx"}`
+
+This also unblocks the E2E test — `POST /rates` must succeed before `GET /bill/<id>` can return `total > 0`.
 
 ---
 
