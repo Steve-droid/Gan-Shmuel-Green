@@ -13,14 +13,26 @@
 
 ## Task split: Steve and Sami
 
-| Task | Owner |
-|---|---|
-| Update test runner in pipeline to run all test files | Steve |
-| Create `tests/test_weight.py` — weight API integration tests | Sami |
-| Create `tests/test_billing.py` — billing API integration tests | Sami |
-| Create `tests/test_e2e.py` — full integration flow | Steve |
-| Deploy updated pipeline to EC2 | Steve |
-| BONUS: Rollback functionality | Steve |
+| Task | Owner | Branch |
+|---|---|---|
+| Update test runner in pipeline to run all test files | Steve | `devops-test-runner` → `devops-test` |
+| Create `tests/test_weight.py` — weight API integration tests | Sami | `devops-test-weight` → `devops-test` |
+| Create `tests/test_billing.py` — billing API integration tests | Sami | `devops-test-billing` → `devops-test` |
+| Create `tests/test_e2e.py` — full integration flow | Steve | `devops-e2e-test` → `devops-e2e` |
+| Deploy updated pipeline to EC2 | Steve | — (after merging `devops-test` + `devops-e2e` to `devops`) |
+| BONUS: Rollback functionality | Steve | `devops-rollback` → `devops` |
+
+**Branch hierarchy:**
+```
+devops
+├── devops-test              ← parent for all test runner + integration test work
+│   ├── devops-test-runner   ← subtask 1a (Steve)
+│   ├── devops-test-weight   ← subtask 1b (Sami)
+│   └── devops-test-billing  ← subtask 1c (Sami)
+├── devops-e2e               ← parent for E2E work
+│   └── devops-e2e-test      ← subtask 2a (Steve)
+└── devops-rollback          ← bonus (Steve)
+```
 
 **Why this split:**
 - Sami writes the integration tests for weight and billing separately — each file focuses on one service and its HTTP endpoints, which is a manageable scope
@@ -70,7 +82,7 @@ Unit tests run after the test environment is up (not before) because the billing
 
 ## Task 1: Manage testing for dev teams
 
-### Subtask 1a: Restructure the test runner in the pipeline (Steve)
+### Subtask 1a: Restructure the test runner in the pipeline (Steve) — `devops-test-runner`
 
 Currently `run_pipeline()` runs a single file:
 ```python
@@ -110,7 +122,7 @@ if result.returncode != 0:
 **Changes needed in `ci/requirements.txt`:**
 - Add `pytest`
 
-### Subtask 1b: Create `tests/test_weight.py` (Sami)
+### Subtask 1b: Create `tests/test_weight.py` (Sami) — `devops-test-weight`
 
 Integration tests for the weight service. These run against the test container at `host.docker.internal:8082`.
 
@@ -123,7 +135,7 @@ Endpoints to test (from `api-spec-for-all-teams.md`):
 - `GET /unknown` — returns list of containers with unknown tara
 - `POST /batch-weight` — uploads container tara weights from file
 
-### Subtask 1c: Create `tests/test_billing.py` (Sami)
+### Subtask 1c: Create `tests/test_billing.py` (Sami) — `devops-test-billing`
 
 Integration tests for the billing service. These run against the test container at `host.docker.internal:8083`.
 
@@ -158,7 +170,7 @@ E2E tests verify the full system works together as a whole — not just individu
 
 This test crosses the boundary between weight and billing — it only passes if both services are running correctly AND the data flows correctly between them.
 
-### Subtask 2a: Create `tests/test_e2e.py` (Steve)
+### Subtask 2a: Create `tests/test_e2e.py` (Steve) — `devops-e2e-test`
 
 General structure:
 ```python
@@ -204,7 +216,7 @@ Both services are already on the same Docker network (same compose file = same d
 
 ---
 
-## Task 3 (BONUS): Rollback functionality (Steve)
+## Task 3 (BONUS): Rollback functionality (Steve) — `devops-rollback`
 
 ### What this means
 
