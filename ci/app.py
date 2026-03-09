@@ -14,6 +14,9 @@ import docker as docker_sdk
 CI_PORT=os.environ.get('CI_PORT', '8085') 
 CI_HOST=os.environ.get('CI_HOST', '0.0.0.0')
 
+#a lock to prevent multiple pipeline runs at the same time, 
+# insures a single pipeline run at a time, and prevents race conditions.
+bussy_lock=threading.Lock()
 
 # Configure the global logging system
 logging.basicConfig(
@@ -66,6 +69,11 @@ def cleanup_test_env():
     logging.info(f"Test cleanup: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Test environment cleanup failed: {result.stderr.strip()}")
+
+def safe_run_pipeline(branch):
+    with bussy_lock:
+        logging.info(f"Starting pipeline for branch '{branch}'")
+        run_pipeline(branch)
 
 
 def run_pipeline(branch):
@@ -201,7 +209,7 @@ def trigger():
     if payload.get('action') == 'deleted':
         return jsonify({"status": "ignored", "reason": "branch deleted"}), 200
 
-    thread = threading.Thread(target=run_pipeline, args=(branch,), daemon=True)
+    thread = threading.Thread(target=safe_run_pipeline, args=(branch,), daemon=True)
     thread.start()
     return jsonify({"status": "triggered", "branch": branch}), 200
 
