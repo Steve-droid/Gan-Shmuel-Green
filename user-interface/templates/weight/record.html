@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Record Weighing{% endblock %}
+
+{% block content %}
+<h2 class="mb-4 fw-bold">Record Weighing</h2>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card border-0 bg-body-secondary">
+      <div class="card-body p-4">
+        <form method="POST">
+          <!-- Direction -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Direction <span class="text-danger">*</span></label>
+            <div class="d-flex gap-3">
+              {% for val, label, icon in [("in","Entering","bi-arrow-right-circle"), ("out","Exiting","bi-arrow-left-circle"), ("none","Standalone","bi-dash-circle")] %}
+              <div class="form-check flex-fill">
+                <input class="form-check-input" type="radio" name="direction" id="dir_{{ val }}"
+                       value="{{ val }}" {% if val == "in" %}checked{% endif %} required>
+                <label class="form-check-label" for="dir_{{ val }}">
+                  <i class="bi {{ icon }} me-1"></i>{{ label }}
+                </label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Truck -->
+          <div class="mb-3">
+            <label for="truck" class="form-label fw-semibold">Truck License Plate</label>
+            <input type="text" class="form-control" id="truck" name="truck"
+                   placeholder="e.g. T-14409 (leave blank for 'na')">
+          </div>
+
+          <!-- Weight + Unit -->
+          <div class="row mb-3">
+            <div class="col-8">
+              <label for="weight" class="form-label fw-semibold">Weight <span class="text-danger">*</span></label>
+              <input type="number" class="form-control" id="weight" name="weight" required min="0">
+            </div>
+            <div class="col-4">
+              <label for="unit" class="form-label fw-semibold">Unit</label>
+              <select class="form-select" id="unit" name="unit">
+                <option value="kg" selected>kg</option>
+                <option value="lbs">lbs</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Containers -->
+          <div class="mb-3">
+            <label for="containers" class="form-label fw-semibold">Containers</label>
+            <input type="text" class="form-control" id="containers" name="containers"
+                   placeholder="C-35434,C-73281 (comma-separated)">
+            <div class="form-text">Comma-delimited list of container IDs</div>
+          </div>
+
+          <!-- Produce -->
+          <div class="mb-3">
+            <label for="produce" class="form-label fw-semibold">Produce</label>
+            <input type="text" class="form-control" id="produce" name="produce"
+                   placeholder="e.g. orange, tomato (leave blank for 'na')">
+          </div>
+
+          <!-- Force -->
+          <div class="mb-4">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="force" name="force" value="true">
+              <label class="form-check-label" for="force">Force overwrite if truck already weighed</label>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-check-circle me-2"></i>Submit Weighing
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result panel -->
+  {% if result %}
+  <div class="col-lg-6">
+    <div class="card border-0 border-start border-success border-3 bg-body-secondary">
+      <div class="card-body p-4">
+        <h5 class="fw-semibold mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i>Result</h5>
+        <table class="table table-sm mb-0">
+          <tbody>
+            {% for key, val in result.items() %}
+            <tr>
+              <th class="text-muted w-50">{{ key }}</th>
+              <td class="font-monospace">{{ val }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

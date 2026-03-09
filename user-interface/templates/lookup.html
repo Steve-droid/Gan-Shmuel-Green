@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Item / Session Lookup{% endblock %}
+
+{% block content %}
+<h2 class="mb-4 fw-bold">Item / Session Lookup</h2>
+
+<div class="row g-4 mb-4">
+  <!-- Item lookup -->
+  <div class="col-lg-6">
+    <div class="card border-0 bg-body-secondary h-100">
+      <div class="card-body p-4">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-truck me-2 text-primary"></i>Truck or Container</h6>
+        <form method="GET" class="row g-2">
+          {% if args.get('session_id') %}
+          <input type="hidden" name="session_id" value="{{ args.get('session_id') }}">
+          {% endif %}
+          <div class="col-12">
+            <input type="text" class="form-control font-monospace" name="item_id"
+                   placeholder="T-14409 or C-35434"
+                   value="{{ args.get('item_id', '') }}">
+          </div>
+          <div class="col-6">
+            <input type="text" class="form-control font-monospace" name="from"
+                   placeholder="From (yyyymmddhhmmss)" value="{{ args.get('from', '') }}">
+          </div>
+          <div class="col-6">
+            <input type="text" class="form-control font-monospace" name="to"
+                   placeholder="To (yyyymmddhhmmss)" value="{{ args.get('to', '') }}">
+          </div>
+          <div class="col-12">
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="bi bi-search me-1"></i>Look Up Item
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Session lookup -->
+  <div class="col-lg-6">
+    <div class="card border-0 bg-body-secondary h-100">
+      <div class="card-body p-4">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-clipboard-data me-2 text-info"></i>Session</h6>
+        <form method="GET" class="row g-2">
+          {% if args.get('item_id') %}
+          <input type="hidden" name="item_id" value="{{ args.get('item_id') }}">
+          {% endif %}
+          <div class="col-12">
+            <input type="text" class="form-control font-monospace" name="session_id"
+                   placeholder="Session ID (e.g. 1)"
+                   value="{{ args.get('session_id', '') }}">
+          </div>
+          <div class="col-12 mt-auto">
+            <button type="submit" class="btn btn-info w-100 text-dark">
+              <i class="bi bi-search me-1"></i>Look Up Session
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Item result -->
+{% if item_result %}
+<div class="card border-0 border-start border-primary border-3 bg-body-secondary mb-4">
+  <div class="card-body p-4">
+    <h5 class="fw-semibold mb-3">
+      <i class="bi bi-box-seam me-2 text-primary"></i>Item: {{ item_result.id }}
+    </h5>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="text-muted small">Tare Weight</div>
+        <div class="fs-5 fw-semibold font-monospace">
+          {% if item_result.tara not in (none, "na", "N/A") %}
+            {{ item_result.tara }} kg
+          {% else %}
+            <span class="text-warning">Unknown</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-8">
+        <div class="text-muted small mb-2">Sessions ({{ item_result.sessions|length }})</div>
+        {% if item_result.sessions %}
+        <div class="d-flex flex-wrap gap-2">
+          {% for sid in item_result.sessions %}
+          <a href="{{ url_for('lookup') }}?session_id={{ sid }}" class="badge bg-primary text-decoration-none font-monospace">
+            {{ sid }}
+          </a>
+          {% endfor %}
+        </div>
+        {% else %}
+          <span class="text-muted">No sessions</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Session result -->
+{% if session_result %}
+<div class="card border-0 border-start border-info border-3 bg-body-secondary">
+  <div class="card-body p-4">
+    <h5 class="fw-semibold mb-3">
+      <i class="bi bi-clipboard-data me-2 text-info"></i>Session {{ session_result.id }}
+    </h5>
+    <div class="row g-3">
+      <div class="col-6 col-md-3">
+        <div class="text-muted small">Truck</div>
+        <div class="fw-semibold font-monospace">{{ session_result.truck or "—" }}</div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="text-muted small">Bruto (gross)</div>
+        <div class="fw-semibold">{{ session_result.bruto }} kg</div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="text-muted small">Truck Tara</div>
+        <div class="fw-semibold">{{ session_result.truckTara }} kg</div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="text-muted small">Neto (fruit)</div>
+        <div class="fw-semibold">
+          {% if session_result.neto not in (none, "na") %}
+            {{ session_result.neto }} kg
+          {% else %}
+            <span class="text-warning">na</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

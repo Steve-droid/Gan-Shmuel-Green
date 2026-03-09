@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Invoice{% endblock %}
+
+{% block content %}
+<h2 class="mb-4 fw-bold">Generate Invoice</h2>
+
+<!-- Query form -->
+<div class="card border-0 bg-body-secondary mb-4">
+  <div class="card-body p-4">
+    <form method="GET" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">Provider ID <span class="text-danger">*</span></label>
+        <input type="text" class="form-control font-monospace" name="provider_id"
+               placeholder="e.g. 3" value="{{ args.get('provider_id', '') }}" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">From</label>
+        <input type="text" class="form-control font-monospace" name="from"
+               placeholder="yyyymmddhhmmss" value="{{ args.get('from', '') }}">
+        <div class="form-text">Defaults to 1st of current month</div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">To</label>
+        <input type="text" class="form-control font-monospace" name="to"
+               placeholder="yyyymmddhhmmss" value="{{ args.get('to', '') }}">
+        <div class="form-text">Defaults to now</div>
+      </div>
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-warning w-100 text-dark">
+          <i class="bi bi-receipt me-2"></i>Generate Invoice
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if bill %}
+<!-- Invoice header -->
+<div class="card border-0 bg-body-secondary mb-3">
+  <div class="card-body p-4">
+    <div class="row align-items-start">
+      <div class="col">
+        <h4 class="fw-bold mb-1">{{ bill.name }}</h4>
+        <div class="text-muted small">Provider ID: <span class="font-monospace">{{ bill.id }}</span></div>
+        <div class="text-muted small">
+          Period: <span class="font-monospace">{{ bill.from }}</span>
+          &rarr; <span class="font-monospace">{{ bill.to }}</span>
+        </div>
+      </div>
+      <div class="col-auto text-end">
+        <div class="text-muted small mb-1">Total</div>
+        <div class="fs-2 fw-bold text-warning">
+          ₪{{ "%.2f"|format(bill.total / 100) }}
+        </div>
+        <div class="text-muted small">{{ bill.total }} agorot</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Summary -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-6">
+    <div class="card border-0 bg-body-secondary text-center py-3">
+      <div class="fs-1 fw-bold text-primary">{{ bill.truckCount }}</div>
+      <div class="text-muted small">Trucks</div>
+    </div>
+  </div>
+  <div class="col-sm-6">
+    <div class="card border-0 bg-body-secondary text-center py-3">
+      <div class="fs-1 fw-bold text-info">{{ bill.sessionCount }}</div>
+      <div class="text-muted small">Delivery Sessions</div>
+    </div>
+  </div>
+</div>
+
+<!-- Products breakdown -->
+{% if bill.products %}
+<h5 class="fw-semibold mb-3">Product Breakdown</h5>
+<div class="table-responsive">
+  <table class="table align-middle">
+    <thead class="table-dark">
+      <tr>
+        <th>Product</th>
+        <th class="text-end">Deliveries</th>
+        <th class="text-end">Total Weight</th>
+        <th class="text-end">Rate</th>
+        <th class="text-end">Pay</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in bill.products %}
+      <tr>
+        <td class="fw-semibold">
+          <i class="bi bi-basket me-2 text-success"></i>{{ p.product }}
+        </td>
+        <td class="text-end">{{ p.count }}</td>
+        <td class="text-end font-monospace">{{ p.amount }} kg</td>
+        <td class="text-end font-monospace">{{ p.rate }} ag/kg</td>
+        <td class="text-end font-monospace fw-semibold">
+          ₪{{ "%.2f"|format(p.pay / 100) }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot class="table-dark">
+      <tr>
+        <td colspan="4" class="fw-bold text-end">Total</td>
+        <td class="text-end fw-bold font-monospace text-warning fs-5">
+          ₪{{ "%.2f"|format(bill.total / 100) }}
+        </td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% else %}
+<div class="text-center text-muted py-4">
+  <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+  No deliveries found for this period.
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

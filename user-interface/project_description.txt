@@ -1,0 +1,437 @@
+
+# Project Overview – Gan Shmuel System
+
+We will go over everything — it will be fun. Let's start.
+
+Today we will discuss:
+
+* What the project is
+* The goals of this week
+* The teams and their roles
+* The schedule
+
+---
+
+# What is Gan Shmuel?
+
+Gan Shmuel is a successful **kibbutz near Hadera**.
+
+It owns the **largest juice factory**, which you probably know under the brand **Prigat / Primor**.
+
+The daily workflow looks like this:
+
+1. A **truck enters**
+2. It **unloads goods**
+3. It **leaves**
+
+The goods on the truck belong to **our suppliers**, and those suppliers must receive **invoices from us**.
+
+We gathered here today to build **a proper system for managing this process**.
+
+---
+
+# Goals of This Week
+
+We need to build **a new weighing system**.
+
+Why?
+
+Because **the previous one broke**.
+
+Additionally, our suppliers want to know **how much we owe them**, so we need to produce **organized invoices for each time period**.
+
+Another important and fun part:
+
+We need several people to help **both teams integrate their systems efficiently**.
+
+These people are known as:
+
+**DevOps.**
+
+---
+
+# System Architecture
+
+We have a server called:
+
+**`weight`**
+
+This server contains a **database**.
+
+The process works like this:
+
+1. A truck enters the factory.
+2. It sends a request:
+
+```
+POST /weight
+```
+
+3. The server processes the request.
+4. The information is stored in the database.
+
+While this happens, the truck unloads **containers** containing fruit used to produce juice.
+
+After unloading, the truck exits the factory.
+
+When the truck exits, we perform calculations to determine **how much fruit was delivered**.
+
+However, the truck leaves **without the containers**, so we cannot directly measure the net fruit weight.
+
+Instead we calculate:
+
+* **Gross weight** — the weight when the truck enters
+* **Fruit net weight**
+* **Truck tare weight** — the weight when the truck leaves
+* **Missing part** — the total weight of the containers
+
+The container weight is obtained **manually from the suppliers**.
+
+---
+
+# Supplier Billing
+
+Suppliers want to know **how much money they are owed**.
+
+They send the request:
+
+```
+GET /bill
+```
+
+to a server called:
+
+**`billing`**
+
+This server checks its **database**, calculates the invoice, and returns the result.
+
+There are **two separate databases**.
+
+Billing must know **what goods were received from suppliers**, therefore **billing depends on weight**.
+
+Billing may request data such as:
+
+```
+GET /weight
+GET /session
+GET /item
+```
+
+Not necessarily all of them — but at least one to obtain accurate data.
+
+---
+
+# Manual Supplier Updates
+
+The administration team can manually insert files into a folder called:
+
+```
+in
+```
+
+In the **weight service**, the `in` folder contains the **container weights**.
+
+However:
+
+The system **does NOT update automatically**.
+
+The update happens only after someone sends the request:
+
+```
+POST /batch-weight
+```
+
+The server then:
+
+1. Looks in the `in` folder
+2. Finds the file
+3. Parses it
+4. Inserts the data into the database
+
+Because this runs inside **Docker**, the folder will probably be implemented using a **volume**.
+
+---
+
+# Billing Price Updates
+
+The same idea exists in **billing**.
+
+There is an `IN` folder containing **supplier price files**.
+
+Example:
+
+Price per kilogram of oranges.
+
+Again:
+
+* Implemented using a **volume**
+* Not updated automatically
+
+Prices update only after sending:
+
+```
+POST /rates
+```
+
+The billing container then:
+
+1. Reads the file name from the request
+2. Looks in the volume
+3. Parses the file
+4. Inserts the data into the database
+
+---
+
+# Teams
+
+## Weight Team
+
+Responsible for the **weighing process**.
+
+Process:
+
+1. Truck enters factory
+2. License plate is recorded
+3. Container IDs are recorded
+4. Truck weight is measured
+5. Truck unloads goods
+6. Truck weight is measured again when leaving
+
+Container weights are **not known automatically**.
+
+They come from **files provided by suppliers**.
+
+---
+
+# Weight Team APIs
+
+All APIs are **REST**.
+
+```
+POST /weight
+```
+
+Triggered whenever a weighing process starts.
+
+```
+POST /weight-batch
+```
+
+Triggered when a file is added to the `in` folder and needs to update the database.
+
+```
+GET /unknown
+```
+
+Will be explained later.
+
+```
+GET /weight
+```
+
+A report that the **billing team may use**.
+
+```
+GET /item
+```
+
+Returns information per truck or container.
+
+```
+GET /session/{id}
+```
+
+A weighing session report.
+
+A **session** is the time between:
+
+* truck entering
+* truck leaving
+
+(two weighings: in and out)
+
+```
+GET /health
+```
+
+---
+
+# Health Endpoint
+
+This is a very common API.
+
+Its purpose is simply to ask:
+
+> "Are you alive?"
+
+Many people mistakenly think `/health` should verify that **the entire system works perfectly**.
+
+That is incorrect.
+
+`GET /health` only verifies that:
+
+* the **server is running**
+* the **application started**
+
+It should **NOT check the database**, because that would create unnecessary load.
+
+During development, the implementation should simply return:
+
+```
+OK
+```
+
+This indicates:
+
+* the container started
+* the Flask app is ready to receive requests
+
+DevOps teams can then monitor the service by repeatedly calling `/health`.
+
+---
+
+# Billing Team
+
+Responsible for **supplier invoices**.
+
+Suppliers may be paid:
+
+* daily
+* weekly
+* monthly
+
+depending on the contract.
+
+The price of goods differs per supplier.
+
+We have **default prices**, but normally suppliers provide price lists that are uploaded manually through the `in` folder.
+
+Suppliers expect a **clear report listing all payments owed**.
+
+---
+
+# Billing APIs
+
+```
+POST /provider
+```
+
+Used by admin to create a new supplier.
+
+```
+PUT /provider/{id}
+```
+
+Used to update supplier name.
+
+```
+POST /rates
+```
+
+Updates pricing from a file in the `in` folder.
+
+```
+GET /rates
+```
+
+Returns a file with all current prices.
+
+The system must:
+
+1. Query the database
+2. Build a table
+3. Send a file to the client
+
+```
+POST /truck
+```
+
+Updates truck information.
+
+Must specify which **provider** owns the truck.
+
+```
+GET /truck
+```
+
+Used by suppliers.
+
+Returns:
+
+* calculated truck weight
+* truck sessions
+* number of sessions
+* session IDs
+
+```
+GET /bill
+```
+
+Returns supplier invoice.
+
+```
+GET /health
+```
+
+Same as weight service.
+
+---
+
+# Bill Endpoint (Important)
+
+This API should be studied **very carefully on the first day**.
+
+Why?
+
+To calculate an invoice for a supplier we must know:
+
+**the total weight of goods supplied by that supplier**.
+
+Therefore this API **depends on the weight service**.
+
+This dependency should be implemented **early in the week**.
+
+---
+
+# Bill Parameters
+
+Time range:
+
+```
+t1 → t2
+```
+
+Default values:
+
+Start:
+
+```
+1st of the month at midnight
+```
+
+End:
+
+```
+now
+```
+
+Suppliers can override these values.
+
+---
+
+# Response Format
+
+The API should return a **JSON** containing:
+
+```
+products
+```
+
+Including:
+
+* total weight supplied
+* type of goods delivered
+* quantity
+
+This is where the **dependency on the weight team** comes into play.
+
