@@ -35,6 +35,7 @@ def put_truck(id):
             (provider_id, id)
         )
         if cursor.rowcount == 0:
+            con.close()
             return jsonify({"error": "Truck not found"}), 404
         
         con.commit()
