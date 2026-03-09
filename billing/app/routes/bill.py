@@ -28,7 +28,8 @@ def get_bill(id):
         trucks = cursor.fetchall()
 
         cursor.execute("SELECT product_id, rate FROM Rates WHERE scope = %s OR scope = 'ALL'", (id,))
-        rates = {row['product_id']: row['rate'] for row in cursor.fetchall()}
+
+        rates = {row['product_id'].lower(): row['rate'] for row in cursor.fetchall()}
 
         con.close()
 
@@ -49,7 +50,8 @@ def get_bill(id):
             for session_id in sessions:
                 session_resp = requests.get(f"{weight_url}/session/{session_id}")
                 session_data = session_resp.json()
-                product = session_data.get('produce', 'unknown')
+
+                product = session_data.get('produce', 'unknown').lower()
                 neto = session_data.get('neto', 'na')
 
                 if neto == 'na' or neto is None:
