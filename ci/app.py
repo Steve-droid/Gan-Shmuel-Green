@@ -175,7 +175,6 @@ def status():
         ci_logs= f"Failed to get CI logs: {e.stderr.strip()}"
     except Exception as e:
         ci_logs= f"Error getting CI logs: {str(e)}" 
-    logging.info(f"CI logs: {ci_logs}")    
     return render_template(
         'status.html',
         containers=container_data,
