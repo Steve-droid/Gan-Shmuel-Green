@@ -102,7 +102,7 @@ def run_pipeline(branch):
     logging.info(f"docker compose build: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Build failed: {result.stderr.strip()}")
-        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 2 (build) failed:\n{result.stderr.strip()}", recipients)
+        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 2 (build) failed:\n{result.stderr.strip()}", recipients)
         return
 
     # Step 3: Deploy to test environment
@@ -113,7 +113,7 @@ def run_pipeline(branch):
     logging.info(f"Test deploy: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Test deploy failed: {result.stderr.strip()}")
-        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 3 (test deploy) failed:\n{result.stderr.strip()}", recipients)
+        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 3 (test deploy) failed:\n{result.stderr.strip()}", recipients)
         return
 
     # Wait for containers to finish booting
