@@ -1,6 +1,8 @@
 import pytest
+import _json
 from unittest.mock import MagicMock, patch
-from app.routes.provider import create_provider, update_provider, get_all_providers
+from app import create_app
+from app.routes.provider import create_provider, update_provider
 
 def test_create_provider_success():
     mock_cursor = MagicMock()
@@ -30,3 +32,31 @@ def test_update_provider_success():
     mock_con.commit.assert_called_once()
     mock_con.close.assert_called_once()
 
+def test_create_provider_empty_name():
+    with patch("app.routes.provider.get_db_connection") as mock_conn:
+        provider_id = create_provider("")
+    assert provider_id is None or provider_id == 0  
+    mock_conn.assert_not_called()
+
+def test_update_provider_empty_name():
+    mock_cursor = MagicMock()
+    mock_cursor.rowcount = 0  
+    mock_con = MagicMock()
+    mock_con.cursor.return_value = mock_cursor
+
+    with patch("app.routes.provider.get_db_connection", return_value=mock_con):
+        result = update_provider(1, "")
+    assert result is False  
+    mock_con.close.assert_called_once()
+
+def test_update_provider_nonexistent_id():
+    mock_cursor = MagicMock()
+    mock_cursor.rowcount = 0  
+    mock_con = MagicMock()
+    mock_con.cursor.return_value = mock_cursor
+
+    with patch("app.routes.provider.get_db_connection", return_value=mock_con):
+        result = update_provider(999, "Some Name")
+    assert result is False
+    mock_con.commit.assert_not_called()  
+    mock_con.close.assert_called_once()
