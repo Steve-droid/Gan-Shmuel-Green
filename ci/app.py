@@ -119,16 +119,32 @@ def run_pipeline(branch):
     time.sleep(5)
 
     # Step 4: Run tests
+    # Step 4a: Unit tests (billing + weight)
     result = subprocess.run(
-        ['python', f'{REPO_DIR}/tests/test_health.py'],
-        capture_output=True, text=True
+        ['python', '-m', 'pytest', 'billing/tests/', 'weight/tests/', '-v'],
+        cwd=REPO_DIR, capture_output=True, text=True
     )
-    logging.info(f"Tests: {result.stdout.strip()}")
+
+    logging.info(f"Unit tests: {result.stdout.strip()}")
+
     if result.returncode != 0:
-        logging.error(f"Tests failed: {result.stderr.strip()}")
-        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 4 (tests) failed:\n{result.stdout.strip()}", recipients)
+        logging.error(f"Unit tests failed: {result.stdout.strip()}")
+        send_email(f"[FAIL] Pipeline failed on {branch}", f"Unit tests failed:\n{result.stdout.strip()}", recipients)
         cleanup_test_env()
         return
+    
+    # Step 4b: Integration tests (DevOps)
+    result = subprocess.run(
+        ['python', '-m', 'pytest', 'tests/', '-v'],
+        cwd=REPO_DIR, capture_output=True, text=True
+    )
+
+    logging.info(f"Integration tests: {result.stdout.strip()}")
+    if result.returncode != 0:
+        logging.error(f"Integration tests failed: {result.stdout.strip()}")
+        send_email(f"[FAIL] Pipeline failed on {branch}", f"Integration tests failed:\n{result.stdout.strip()}", recipients)
+        cleanup_test_env()
+        return    
 
     cleanup_test_env()
 

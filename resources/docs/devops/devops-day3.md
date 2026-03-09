@@ -68,15 +68,17 @@ Unit tests catch logic errors fast. Integration tests catch deployment and wirin
 ```
 Step 1: git update (fetch + checkout + reset)
 Step 2: Build images (docker compose build)
-Step 3: Deploy test environment (docker-compose.test.yml up)
-Step 4a: Sleep(5) — wait for services to boot
-Step 4b: Run unit tests (billing/tests/, weight/tests/) — DB is available
-Step 4c: Run integration tests (tests/) — services are running
+Step 3: Deploy test environment (docker-compose.test.yml up + sleep(5))
+Step 4: Run tests
+         → 4a: Unit tests (billing/tests/, weight/tests/)
+         → 4b: Integration tests (tests/)
 Step 5: Cleanup test environment
 Step 6: (main only) Deploy to production
 ```
 
-Unit tests run after the test environment is up (not before) because the billing/weight teams may make real DB calls in their tests. Since the DB containers are part of the test environment, running everything after Step 3 is the safest approach.
+`sleep(5)` is part of step 3 — it waits for services to finish booting before tests can run. It is not a test step.
+
+Unit tests run after the test environment is up because the billing/weight teams may make real DB calls in their tests. Since the DB containers are part of the test environment, running everything after step 3 is the safest approach.
 
 ---
 
@@ -94,7 +96,8 @@ This needs to be replaced with two sequential pytest calls — one for unit test
 **Changes needed in `ci/app.py`:**
 
 ```python
-# Step 4b: Run unit tests (billing + weight)
+# Step 4: Run tests
+# Step 4a: Unit tests (billing + weight)
 result = subprocess.run(
     ['python', '-m', 'pytest', 'billing/tests/', 'weight/tests/', '-v'],
     cwd=REPO_DIR, capture_output=True, text=True
@@ -106,7 +109,7 @@ if result.returncode != 0:
     cleanup_test_env()
     return
 
-# Step 4c: Run integration tests (DevOps)
+# Step 4b: Integration tests (DevOps)
 result = subprocess.run(
     ['python', '-m', 'pytest', 'tests/', '-v'],
     cwd=REPO_DIR, capture_output=True, text=True
