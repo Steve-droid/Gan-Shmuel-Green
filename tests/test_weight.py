@@ -4,7 +4,7 @@ import os
 import time
 
 # Use the service name defined in your docker-compose.yml
-APP_URL = os.getenv("W_URL", "http://weight-app:5000")
+WEIGHT_URL = os.getenv("WEIGHT_URL", "http://weight-app:5000")
 
 #0 test heath endpoint to ensure container is up before running other tests
 def test_app_health_endpoint():
@@ -12,7 +12,7 @@ def test_app_health_endpoint():
     CI Test: Checks if the remote Flask app container 
     returns a 200 OK from its health endpoint.
     """
-    endpoint = f"{APP_URL}/health"
+    endpoint = f"{WEIGHT_URL}/health"
     
     try:
         response = requests.get(endpoint, timeout=5)
@@ -38,7 +38,7 @@ def shared_data():
 def test_post_batch_weight(shared_data):
     # This assumes 'containers1.json' exists in your /in volume
     payload = {"file": "containers1.json"}
-    response = requests.post(f"{APP_URL}/batch-weight", json=payload)
+    response = requests.post(f"{WEIGHT_URL}/batch-weight", json=payload)
     
     # If the file exists, we expect 201. 
     # If testing empty environment, adjust to check for 201 or 404
@@ -54,7 +54,7 @@ def test_post_weight_in(shared_data):
         "produce": "apples",
         "containers": shared_data["container_id"]
     }
-    response = requests.post(f"{APP_URL}/weight", json=payload)
+    response = requests.post(f"{WEIGHT_URL}/weight", json=payload)
     assert response.status_code == 201
     
     data = response.json()
@@ -64,7 +64,7 @@ def test_post_weight_in(shared_data):
 # 3. Test GET /weight (List)
 def test_get_weight_list():
     # Test with default range
-    response = requests.get(f"{APP_URL}/weight")
+    response = requests.get(f"{WEIGHT_URL}/weight")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
     assert len(response.json()) > 0
@@ -72,7 +72,7 @@ def test_get_weight_list():
 # 4. Test GET /session/<id>
 def test_get_session(shared_data):
     sess_id = shared_data["session_id"]
-    response = requests.get(f"{APP_URL}/session/{sess_id}")
+    response = requests.get(f"{WEIGHT_URL}/session/{sess_id}")
     assert response.status_code == 200
     
     data = response.json()
@@ -82,7 +82,7 @@ def test_get_session(shared_data):
 # 5. Test GET /item/<id>
 def test_get_item(shared_data):
     truck_id = shared_data["truck_id"]
-    response = requests.get(f"{APP_URL}/item/{truck_id}")
+    response = requests.get(f"{WEIGHT_URL}/item/{truck_id}")
     assert response.status_code == 200
     
     data = response.json()
@@ -91,7 +91,7 @@ def test_get_item(shared_data):
 
 # 6. Test GET /unknown
 def test_get_unknown(shared_data):
-    response = requests.get(f"{APP_URL}/unknown")
+    response = requests.get(f"{WEIGHT_URL}/unknown")
     assert response.status_code == 200
     # Since C-999 was used in test_post_weight_in but likely isn't 
     # in the DB registry yet, it should appear here.
@@ -105,7 +105,7 @@ def test_post_weight_out(shared_data):
         "weight": 5000, # Truck is lighter now
         "unit": "kg"
     }
-    response = requests.post(f"{APP_URL}/weight", json=payload)
+    response = requests.post(f"{WEIGHT_URL}/weight", json=payload)
     assert response.status_code == 201
     
     data = response.json()
