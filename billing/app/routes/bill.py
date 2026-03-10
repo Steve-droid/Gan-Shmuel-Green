@@ -27,9 +27,13 @@ def get_bill(id):
             "SELECT id FROM Trucks WHERE provider_id = %s", (id,))
         trucks = cursor.fetchall()
 
-        cursor.execute("SELECT product_id, rate FROM Rates WHERE scope = %s OR scope = 'ALL'", (id,))
-
-        rates = {row['product_id'].lower(): row['rate'] for row in cursor.fetchall()}
+        cursor.execute(
+            "SELECT product_id, rate, scope FROM Rates WHERE scope = %s OR scope = 'ALL'",
+            (str(id),)
+        )
+        rows = cursor.fetchall()
+        rates = {row['product_id'].lower(): row['rate'] for row in rows if row['scope'] == 'ALL'}
+        rates.update({row['product_id'].lower(): row['rate'] for row in rows if row['scope'] != 'ALL'})
 
         con.close()
 
