@@ -1,7 +1,8 @@
-# Environment variables / credentials                                                                                                                                                                        
-.env                                                                                                                                                                                                         
-*.env                                                                                                                                                                                                        
-                                                                                                                                                                                                              
+
+# Environment variables / credentials                                         
+
+.env
+
 # Python artifacts
 __pycache__/
 *.pyc
@@ -11,3 +12,8 @@ __pycache__/
 *.pem
 *.key
 
+# Virtual environments
+.venv/
+venv/
+.uivenv/
+uivenv/
