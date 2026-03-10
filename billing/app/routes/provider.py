@@ -40,7 +40,6 @@ def update_provider(provider_id: str, new_name: str):
 
 def get_all_providers():
     con=None
-
     try:
         con = get_db_connection()
         cursor = con.cursor()    
@@ -52,7 +51,6 @@ def get_all_providers():
     except Exception as e:
         if con:
             con.close()
-        print("Error in get_all_providers:", e, flush=True)
         return []
 
 # --- Routes ---

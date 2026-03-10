@@ -10,8 +10,6 @@ os.environ.setdefault("DB_PASSWORD", "testpass")
 os.environ.setdefault("DB_NAME", "billdb")
 
 from app import create_app
-
-
 @pytest.fixture
 def client():
     app = create_app()
