@@ -48,6 +48,71 @@ WEIGHT_SERVICE_URL=http://weight:5000
 
 This file is gitignored — set it manually, don't commit it.
 
+#### Step 3b — Fix known issues before testing
+
+---
+
+**Fix 1: EC2 spurious local branches**
+
+**Reason:** Git has local branches literally named `origin/billing`, `origin/devops`, etc. at `refs/heads/origin/*`. These conflict with the remote-tracking refs at `refs/remotes/origin/*`. When the pipeline runs `git reset --hard origin/devops`, Git sees two matching refs and picks the wrong one (the old local branch), causing the reset to land on a stale commit instead of the latest remote.
+
+**Fix:**
+```bash
+sudo git branch -d origin/bill-feature origin/devops-branch-filter origin/devops-hotfix-mailing origin/devops-monitor
+```
+
+**How to diagnose in future:** `sudo git show-ref | grep <branch-name>` — if you see both `refs/heads/origin/X` and `refs/remotes/origin/X`, the local one is the spurious one. Delete it.
+
+---
+
+**Fix 2: Weight tests — `from app import app` import error**
+
+**Reason:** All weight tests do `from app import app`. This is a Python import — Python searches `sys.path` for a file called `app.py`. When pytest runs from `/repo`, `sys.path` contains `/repo` but not `/repo/weight/`, so Python looks for `/repo/app.py` which doesn't exist. Every test fails with `ImportError` before even running.
+
+**What is `sys.path`:** A Python list of directory paths that Python searches when resolving imports. It's populated at startup from the current directory, environment variables, and installed packages.
+
+**What is `conftest.py`:** A special file recognized exclusively by pytest. pytest automatically discovers and loads every `conftest.py` it finds while walking the directory tree toward the test files — you never import it manually. Common uses: define shared fixtures, manipulate the environment before tests run.
+
+**What is a fixture:** A function decorated with `@pytest.fixture` that pytest runs automatically before a test to set up what the test needs. Instead of repeating setup code in every test, you define it once as a fixture and pytest injects it into any test function that declares it as a parameter. The `yield` keyword splits setup (before) from teardown (after the test).
+
+**Fix:** Create a new file `weight/conftest.py` (at `weight/` root, NOT inside `weight/tests/`) — do not move or modify `weight/tests/conftest.py`:
+
+```python
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+```
+
+**Breaking down `sys.path.insert(0, os.path.dirname(__file__))`:**
+- `__file__` — built-in Python variable holding the current file's path, e.g. `/repo/weight/conftest.py`
+- `os.path.dirname(__file__)` — strips the filename, returns just the directory: `/repo/weight`
+- `sys.path.insert(0, ...)` — inserts that directory at position `0` (the front of the list), so Python checks `weight/` first before anything else
+
+pytest loads `weight/conftest.py` before `weight/tests/conftest.py`, so the path is fixed before any test tries to import `app`.
+
+---
+
+**Fix 3: Weight tests — `test_e2e.py` and `test_db_functions_day2.py` use `localhost`**
+
+**Reason:** `test_e2e.py` hits `http://localhost:5000` and `test_db_functions_day2.py` connects directly to a `localhost` DB. Neither address is reachable from inside the CI container — the weight service runs in a separate container, not on localhost from the CI's perspective.
+
+**Fix:** Exclude them from the CI test run with `--ignore` flags in `ci/app.py` Step 4a:
+
+```bash
+python -m pytest billing/tests/ weight/tests/ -v \
+  --ignore=weight/tests/test_e2e.py \
+  --ignore=weight/tests/test_db_functions_day2.py
+```
+
+---
+
+**Fix 4: Billing tests — same `from app import app` issue (flag to Einav)**
+
+**Reason:** Same as Fix 2. When billing merges, `billing/tests/` will likely have tests that do `from app import app`. The CI runs `pytest billing/tests/` from `/repo`, so the same `ImportError` applies.
+
+**Fix:** Einav needs to add `billing/conftest.py` at `billing/` root with the same two lines as Fix 2.
+
+---
+
 #### Step 4 — Test locally
 
 ```bash
