@@ -2,7 +2,7 @@ import pytest
 import requests
 import os
 # Use the service name defined in your docker-compose.yml
-WEIGHT_URL = os.getenv("WEIGHT_SERVICE_URL", "http:weight:5000")
+WEIGHT_URL = os.getenv("WEIGHT_SERVICE_URL", "http://localhost:8082")
 
 #0 test heath endpoint to ensure container is up before running other tests
 def test_app_health_endpoint():

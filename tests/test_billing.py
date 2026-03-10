@@ -4,7 +4,7 @@ import os
 
 # Get the URL of the app container from environment variables
 # Default to localhost if not set (for local testing)
-BILLING_URL = os.getenv("BILLING_URL", "http:billing:5001")
+BILLING_URL = os.getenv("BILLING_URL", "http://localhost:8083")
 
 def test_app_health_endpoint():
     """
