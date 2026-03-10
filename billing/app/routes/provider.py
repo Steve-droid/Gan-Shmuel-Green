@@ -5,6 +5,9 @@ import uuid
 provider_bp = Blueprint("provider", __name__)
 
 def create_provider(name: str):
+    if not name:
+        return None
+    con=None
     try:
         con = get_db_connection()
         cursor = con.cursor()
@@ -20,12 +23,14 @@ def create_provider(name: str):
         return None
 
 def update_provider(provider_id: str, new_name: str):
+    con=None
     try:
         con = get_db_connection()
         cursor = con.cursor()
         cursor.execute("UPDATE Provider SET name = %s WHERE id = %s", (new_name, provider_id))
         updated = cursor.rowcount > 0
-        con.commit()
+        if updated:
+            con.commit()
         con.close()
         return updated
     except Exception:
@@ -34,15 +39,12 @@ def update_provider(provider_id: str, new_name: str):
         return False
 
 def get_all_providers():
-    print("Entering get_all_providers", flush=True)
+    con=None
 
     try:
-        print("Entering try", flush=True)
-
         con = get_db_connection()
         cursor = con.cursor()    
         cursor.execute("SELECT id, name FROM Provider")
-        print("ufter", flush=True)
 
         rows = cursor.fetchall()
         con.close()
