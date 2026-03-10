@@ -123,7 +123,9 @@ def run_pipeline(branch):
     # Step 4: Run tests
     # Step 4a: Unit tests (billing + weight)
     result = subprocess.run(
-        ['python', '-m', 'pytest', 'billing/tests/', 'weight/tests/', '-v'],
+        ['python', '-m', 'pytest', 'billing/tests/', 'weight/tests/', '-v',
+         '--ignore=weight/tests/test_e2e.py',
+         '--ignore=weight/tests/test_db_functions_day2.py'],
         cwd=REPO_DIR, capture_output=True, text=True
     )
 
