@@ -472,7 +472,7 @@ def get_unknown():
         
         # 2. Fetch all 'known' container IDs from registration
         # In your DB, the table name is 'containers_registered'
-        cursor.execute("SELECT id FROM containers_registered")
+        cursor.execute("SELECT container_id FROM containers_registered")
         registered_rows = cursor.fetchall()
 
         # 3. Create a set of Known IDs (the 'Registry')
