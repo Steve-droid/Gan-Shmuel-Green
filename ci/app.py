@@ -14,6 +14,9 @@ import docker as docker_sdk
 CI_PORT=os.environ.get('CI_PORT', '8085') 
 CI_HOST=os.environ.get('CI_HOST', '0.0.0.0')
 
+#a lock to prevent multiple pipeline runs at the same time, 
+# insures a single pipeline run at a time, and prevents race conditions.
+bussy_lock=threading.Lock()
 
 # Configure the global logging system
 logging.basicConfig(
@@ -67,6 +70,11 @@ def cleanup_test_env():
     if result.returncode != 0:
         logging.error(f"Test environment cleanup failed: {result.stderr.strip()}")
 
+def safe_run_pipeline(branch):
+    with bussy_lock:
+        logging.info(f"Starting pipeline for branch '{branch}'")
+        run_pipeline(branch)
+
 
 def run_pipeline(branch):
     recipients = get_recipients(branch)
@@ -74,7 +82,7 @@ def run_pipeline(branch):
     # Step 1: Update repo
     git_commands = [
         ['git', 'stash'],
-        ['git','clea','-fd'],
+        ['git','clean','-fd'],
         ['git', 'fetch', 'origin', branch],
         ['git', 'checkout', '-B', branch, f'origin/{branch}'],
         ['git', 'reset', '--hard', f'origin/{branch}'],
@@ -84,7 +92,7 @@ def run_pipeline(branch):
         logging.info(f"{' '.join(cmd)}: {result.stdout.strip()}")
         if result.returncode != 0:
             logging.error(f"Failed: {result.stderr.strip()}")
-            send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 1 (git) failed:\n{result.stderr.strip()}", recipients)
+            #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 1 (git) failed:\n{result.stderr.strip()}", recipients)
             return
 
     # Step 2: Build images
@@ -95,7 +103,7 @@ def run_pipeline(branch):
     logging.info(f"docker compose build: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Build failed: {result.stderr.strip()}")
-        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 2 (build) failed:\n{result.stderr.strip()}", recipients)
+        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 2 (build) failed:\n{result.stderr.strip()}", recipients)
         return
 
     # Step 3: Deploy to test environment
@@ -106,23 +114,39 @@ def run_pipeline(branch):
     logging.info(f"Test deploy: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Test deploy failed: {result.stderr.strip()}")
-        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 3 (test deploy) failed:\n{result.stderr.strip()}", recipients)
+        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 3 (test deploy) failed:\n{result.stderr.strip()}", recipients)
         return
 
     # Wait for containers to finish booting
     time.sleep(5)
 
     # Step 4: Run tests
+    # Step 4a: Unit tests (billing + weight)
     result = subprocess.run(
-        ['python', f'{REPO_DIR}/tests/test_health.py'],
-        capture_output=True, text=True
+        ['python', '-m', 'pytest', 'billing/tests/', 'weight/tests/', '-v'],
+        cwd=REPO_DIR, capture_output=True, text=True
     )
-    logging.info(f"Tests: {result.stdout.strip()}")
+
+    logging.info(f"Unit tests: {result.stdout.strip()}")
+
     if result.returncode != 0:
-        logging.error(f"Tests failed: {result.stderr.strip()}")
-        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 4 (tests) failed:\n{result.stdout.strip()}", recipients)
+        logging.error(f"Unit tests failed: {result.stdout.strip()}")
+        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Unit tests failed:\n{result.stdout.strip()}", recipients)
         cleanup_test_env()
         return
+    
+    # Step 4b: Integration tests (DevOps)
+    result = subprocess.run(
+        ['python', '-m', 'pytest', 'tests/', '-v'],
+        cwd=REPO_DIR, capture_output=True, text=True
+    )
+
+    logging.info(f"Integration tests: {result.stdout.strip()}")
+    if result.returncode != 0:
+        logging.error(f"Integration tests failed: {result.stdout.strip()}")
+        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Integration tests failed:\n{result.stdout.strip()}", recipients)
+        cleanup_test_env()
+        return    
 
     cleanup_test_env()
 
@@ -139,7 +163,7 @@ def run_pipeline(branch):
     logging.info(f"Production deploy: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Production deploy failed: {result.stderr.strip()}")
-        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 5 (prod deploy) failed:\n{result.stderr.strip()}", recipients)
+        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 5 (prod deploy) failed:\n{result.stderr.strip()}", recipients)
         return
 
     logging.info("Pipeline finished successfully")
@@ -169,7 +193,6 @@ def status():
         ci_logs= f"Failed to get CI logs: {e.stderr.strip()}"
     except Exception as e:
         ci_logs= f"Error getting CI logs: {str(e)}" 
-    logging.info(f"CI logs: {ci_logs}")    
     return render_template(
         'status.html',
         containers=container_data,
@@ -203,7 +226,7 @@ def trigger():
     if payload.get('action') == 'deleted':
         return jsonify({"status": "ignored", "reason": "branch deleted"}), 200
 
-    thread = threading.Thread(target=run_pipeline, args=(branch,), daemon=True)
+    thread = threading.Thread(target=safe_run_pipeline, args=(branch,), daemon=True)
     thread.start()
     return jsonify({"status": "triggered", "branch": branch}), 200
 
