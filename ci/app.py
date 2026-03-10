@@ -121,19 +121,34 @@ def run_pipeline(branch):
     time.sleep(5)
 
     # Step 4: Run tests
-    # Step 4a: Unit tests (billing + weight)
+    # Step 4a-i: Billing unit tests
     result = subprocess.run(
-        ['python', '-m', 'pytest', 'billing/tests/', 'weight/tests/', '-v',
+        ['python', '-m', 'pytest', 'billing/tests/', '-v',
+         '--ignore=billing/tests/test_integration.py'],
+        cwd=REPO_DIR, capture_output=True, text=True
+    )
+
+    logging.info(f"Billing tests: {result.stdout.strip()}")
+
+    if result.returncode != 0:
+        logging.error(f"Billing tests failed: {result.stdout.strip()}")
+        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Billing tests failed:\n{result.stdout.strip()}", recipients)
+        cleanup_test_env()
+        return
+
+    # Step 4a-ii: Weight unit tests
+    result = subprocess.run(
+        ['python', '-m', 'pytest', 'weight/tests/', '-v',
          '--ignore=weight/tests/test_e2e.py',
          '--ignore=weight/tests/test_db_functions_day2.py'],
         cwd=REPO_DIR, capture_output=True, text=True
     )
 
-    logging.info(f"Unit tests: {result.stdout.strip()}")
+    logging.info(f"Weight tests: {result.stdout.strip()}")
 
     if result.returncode != 0:
-        logging.error(f"Unit tests failed: {result.stdout.strip()}")
-        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Unit tests failed:\n{result.stdout.strip()}", recipients)
+        logging.error(f"Weight tests failed: {result.stdout.strip()}")
+        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Weight tests failed:\n{result.stdout.strip()}", recipients)
         cleanup_test_env()
         return
     
