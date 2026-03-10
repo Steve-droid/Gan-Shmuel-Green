@@ -124,6 +124,22 @@ def insert_transaction(tx: Transaction) -> int:
 
 
 
+def get_in_transaction_for_session(session_id: int) -> Optional[Transaction]:
+    """Get the 'in' transaction that started a given session."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT * FROM transactions WHERE sessionId = %s AND direction = 'in' LIMIT 1",
+        (session_id,)
+    )
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    if row:
+        return Transaction.from_db_row(row)
+    return None
+
+
 def get_last_transaction_for_truck(truck: str) -> Optional[Transaction]:
     """Get the most recent transaction for a truck"""
     conn = get_db()

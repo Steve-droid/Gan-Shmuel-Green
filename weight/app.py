@@ -15,6 +15,7 @@ from db import (
     update_transaction,
     get_last_transaction_for_truck,
     get_last_open_in_for_truck,
+    get_in_transaction_for_session,
     get_containers_tara,
     upsert_containers,
     get_item_type,
@@ -22,7 +23,6 @@ from db import (
     get_truck_last_tara_kg,
     get_sessions_for_truck,
     get_sessions_for_container,
-    
 )
 from entity_models import Transaction, Container
 
@@ -30,6 +30,7 @@ app = Flask(__name__)
 
 Direction = Literal["in", "out", "none"]
 LBS_TO_KG = 0.45359237
+IN_FOLDER = os.getenv("IN_FOLDER", "/app/in")
 
 #check if kg / lbs if lbs convert to kg
 def to_kg_int(weight: int, unit: str) -> int:
@@ -104,9 +105,10 @@ def post_weight():
         if direction == "none" and open_in is not None:
             return jsonify({"error": "none after in is not allowed"}), 400
 
-        # out without an in -> error
+        # out without an in -> error, unless force-overwriting a previous out
         if direction == "out" and open_in is None:
-            return jsonify({"error": "out without an in is not allowed"}), 400
+            if not (force and last_tx is not None and last_tx.direction == "out"):
+                return jsonify({"error": "out without an in is not allowed"}), 400
 
         # in followed by in -> error or force overwrite
         if direction == "in" and open_in is not None and not force:
@@ -139,11 +141,11 @@ def post_weight():
                 'produce': produce,
             })
             return jsonify({
-                'id': open_in.id,
+                'sessionId': open_in.session_id,
                 'truck': truck,
                 'bruto': bruto_kg
             }), 201
-            
+
         else:
             new_tx = Transaction(
             datetime=now,
@@ -158,33 +160,43 @@ def post_weight():
             )
 
             tx_id = insert_transaction(new_tx)
+            # sessionId = own transaction id (anchor for the paired "out")
             update_transaction(tx_id, {'sessionId': tx_id})
             return jsonify({
-                'id': tx_id,
+                'sessionId': tx_id,
                 'truck': truck,
                 'bruto': bruto_kg
             }), 201
 
     elif direction == "out":
-        session_id = open_in.session_id
+        # When force-overwriting a previous "out", open_in is None — fetch original "in" from DB
+        original_in = open_in if open_in is not None else get_in_transaction_for_session(last_tx.session_id)
+        session_id = original_in.session_id
         truck_tara = bruto_kg  # the "out" measurement is the truck's tara (empty weight)
 
-        container_taras = get_containers_tara(open_in.containers or [])
+        if bruto_kg >= original_in.bruto:
+            return jsonify({"error": f"Out weight ({bruto_kg} kg) must be less than in weight ({original_in.bruto} kg) for this session"}), 400
+
+        # Containers and produce are not recorded on exit
+        containers_list = []
+        produce = "na"
+
+        container_taras = get_containers_tara(original_in.containers or [])
         if None in container_taras.values():
             neto = "na"
         else:
-            neto = open_in.bruto - truck_tara - sum(container_taras.values())
+            neto = original_in.bruto - truck_tara - sum(container_taras.values())
 
         if last_tx and last_tx.direction == "out" and force:
             # Overwrite existing "out" row in place with same id and sessionId, new data
             update_transaction(last_tx.id, {
                 'datetime': now,
                 'truck': truck,
-                'containers': ','.join(containers_list),
+                'containers': '',
                 'bruto': bruto_kg,
                 'truckTara': truck_tara,
                 'neto': neto if isinstance(neto, int) else None,
-                'produce': produce,
+                'produce': 'na',
             })
         else:
             new_tx = Transaction(
@@ -200,7 +212,7 @@ def post_weight():
             )
             insert_transaction(new_tx)
         return jsonify({
-            'id': session_id,
+            'sessionId': session_id,
             'truck': truck,
             'bruto': bruto_kg,
             'truckTara': truck_tara,
@@ -221,7 +233,7 @@ def post_weight():
         )
         tx_id = insert_transaction(new_tx)
         return jsonify({
-            'id': tx_id,
+            'sessionId': tx_id,
             'truck': truck,
             'bruto': bruto_kg
         }), 201
@@ -285,9 +297,9 @@ def get_weights():
 
         # 3. Build the query with the dynamic placeholders
         query = f"""
-            SELECT id, direction, bruto, neto, produce, containers 
-            FROM transactions 
-            WHERE datetime BETWEEN %s AND %s 
+            SELECT id, sessionId, direction, bruto, neto, produce, containers
+            FROM transactions
+            WHERE datetime BETWEEN %s AND %s
             AND direction IN ({placeholders})
         """
         
@@ -306,13 +318,11 @@ def get_weights():
         formatted_response = []
         for row in results:
             formatted_response.append({
-                "id": row["id"],
+                "sessionId": row["sessionId"],
                 "direction": row["direction"],
-                "bruto": row["bruto"], # Assumed stored as KG
-                # Handle "na" for neto if tara was unknown (NULL in DB)
+                "bruto": row["bruto"],
                 "neto": row["neto"] if row["neto"] is not None else "na",
                 "produce": row["produce"],
-                # Convert "c1,c2" string into list ["c1", "c2"]
                 "containers": row["containers"].split(",") if row["containers"] else []
             })
 
@@ -328,70 +338,58 @@ def get_weights():
 @app.get('/session/<id>')
 def get_session(id):
     conn = get_db()
-    try:
-        cursor = conn.cursor(dictionary=True)
-        
-        # Ensure your query explicitly asks for all needed columns
-        cursor.execute("SELECT * FROM transactions WHERE id=%s", (id,))
-        row = cursor.fetchone()
+    cursor = conn.cursor(dictionary=True)
 
-        if not row:
+    try:
+        # מביאים את כל הרשומות של אותו session
+        cursor.execute("""
+            SELECT *
+            FROM transactions
+            WHERE sessionId = %s
+            ORDER BY datetime ASC, id ASC
+        """, (id,))
+        rows = cursor.fetchall()
+
+        if not rows:
             return jsonify({
                 "status": "error",
                 "message": f"Session ID {id} was not found."
             }), 404
 
-        # 1. Build the Base Response safely
+        in_row = None
+        out_row = None
+
+        for row in rows:
+            if row.get("direction") == "in" and in_row is None:
+                in_row = row
+            elif row.get("direction") == "out" and out_row is None:
+                out_row = row
+
+        # אם אין in ניקח את הרשומה הראשונה כבסיס
+        base_row = in_row if in_row else rows[0]
+
         response_data = {
-            "id": row.get('id'),
-            "truck": row.get('truck') if row.get('truck') else "na",
-            "bruto": row.get('bruto'),
-            # Safely handle datetime objects
-            "datetime": row['datetime'].strftime("%a, %d %b %Y %H:%M:%S GMT") if row.get('datetime') else "na"
+            "id": base_row.get("sessionId"),
+            "truck": base_row.get("truck") or "na",
+            "bruto": base_row.get("bruto"),
+            "produce": base_row.get("produce") or "na"
         }
 
-        # 2. Logic for 'OUT' Sessions
-        if row.get('direction') == "out":
-            tara = row.get('truckTara')
-            
-            # Check for missing/zero Tara
-            if not tara or tara == 0:
-                response_data.update({"truckTara": "na", "neto": "na"})
-                return jsonify(response_data), 200
+        # אם יש OUT, נוסיף גם את המידע שלו
+        if out_row:
+            response_data["truckTara"] = out_row.get("truckTara")
 
-            # 3. Process Containers safely
-            # Using .get('containers') avoids the KeyError if the key is missing
-            container_str = str(row.get('containers')) if row.get('containers') else ""
-            container_ids = [c.strip() for c in container_str.split(",") if c.strip()]
-            
-            total_container_weight = 0
-            all_weights_known = True
-
-            for c_id in container_ids:
-                cursor.execute("SELECT weight FROM containers_registered WHERE container_id=%s", (c_id,))
-                c_row = cursor.fetchone()
-                
-                if c_row and c_row.get('weight') is not None:
-                    total_container_weight += c_row['weight']
-                else:
-                    all_weights_known = False
-                    break
-            
-            if all_weights_known:
-                response_data["neto"] = (row.get('bruto') or 0) - tara - total_container_weight
-            else:
+            if out_row.get("neto") is None:
                 response_data["neto"] = "na"
-                
-            response_data["truckTara"] = tara
+            else:
+                response_data["neto"] = out_row.get("neto")
+
 
         return jsonify(response_data), 200
 
     finally:
         cursor.close()
         conn.close()
-
-
-IN_FOLDER = os.environ['IN_FOLDER']
 
 
 def _parse_batch_file(filepath: str) -> list[Container]:
@@ -459,14 +457,55 @@ def post_batch_weight():
 
 @app.get('/unknown')
 def get_unknown():
-    """Get containers with unknown weight"""
-    
-    # TODO: Implement logic
-    # - Query `containers_registered` for missing container IDs
-    # - Cross-reference with `transactions.containers`
-    # - Return array of container ids
-    
-    return jsonify([]), 200
+    """
+    Returns a list of container IDs that have appeared in transactions 
+    but do not have a registered weight in the system.
+    """
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        
+        # 1. Fetch all 'seen' containers from transactions
+        # We only need the 'containers' column
+        cursor.execute("SELECT containers FROM transactions")
+        transaction_rows = cursor.fetchall()
+        
+        # 2. Fetch all 'known' container IDs from registration
+        # In your DB, the table name is 'containers_registered'
+        cursor.execute("SELECT id FROM containers_registered")
+        registered_rows = cursor.fetchall()
+
+        # 3. Create a set of Known IDs (the 'Registry')
+        # We strip and uppercase to handle any messy manual entries
+        registered_ids = {row[0].strip().upper() for row in registered_rows if row[0]}
+        
+        # 4. Create a set of Seen IDs (from the scale)
+        seen_ids = set()
+        for row in transaction_rows:
+            # Skip empty rows (Edge Case: Scale record with no containers)
+            if row[0]:
+                # Split the string (e.g., "C-1,C-2") and clean each ID
+                parts = row[0].split(',')
+                for p in parts:
+                    clean_id = p.strip().upper()
+                    if clean_id: # Avoid adding empty strings if someone typed "C-1, ,C-2"
+                        seen_ids.add(clean_id)
+        
+        # 5. Logic: Find IDs in 'Seen' that are NOT in 'Registered'
+        unknown_diff = seen_ids - registered_ids
+        
+        # 6. Return as a clean JSON list
+        # We convert the set back to a sorted list for consistent output
+        return jsonify(sorted(list(unknown_diff))), 200
+
+    except Exception as e:
+        # DevOps/Backend safety: Always log or return the error so we aren't flying blind
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+        
+    finally:
+        # Closing the 'tap' to prevent memory leaks and database hanging
+        cursor.close()
+        conn.close()
 
 
 @app.get('/item/<item_id>')
