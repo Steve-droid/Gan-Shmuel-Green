@@ -1,0 +1,60 @@
+services:
+
+  # MySQL database for the weight service 
+  weight-db:
+    build:
+      context: .                          # project root so COPY can reach resources/
+      dockerfile: weight-db/Dockerfile
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: weight
+    volumes:
+      - weight-db-data:/var/lib/mysql     # persist data across container restarts
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Weight microservice (Flask API)
+    build: ./weight
+    ports:
+      - "5001:5000"                       # accessible at localhost:5001 from the host
+    environment:
+      DB_HOST: weight-db                  # service name on the Docker network
+      DB_USER: root
+      DB_PASSWORD: rootpass
+      DB_NAME: weight
+      DB_PORT: 3306
+      IN_FOLDER: /in
+    volumes:
+      - ./in:/in                          # shared folder for batch CSV uploads
+    depends_on:
+      weight-db:
+        condition: service_healthy        # wait until MySQL is ready
+    networks:
+      - app-net
+
+  # User interface (Flask web app)
+    build: ./user-interface
+    ports:
+      - "5000:5000"                       # open the browser at http://localhost:5000
+    environment:
+      WEIGHT_URL: http://weight:5000      # internal Docker hostname
+      BILLING_URL: http://billing:5000    # placeholder until billing is implemented
+      PORT: 5000
+      SECRET_KEY: change-me-in-production
+    depends_on:
+      - weight
+    networks:
+      - app-net
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  weight-db-data:
