@@ -17,7 +17,7 @@ services:
   billing:
     build: ./billing
     ports:
-      - "8081:8081"
+      - "8081:5051"
     environment:
       - DB_HOST=billing-db
       - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
@@ -36,7 +36,7 @@ services:
   weight:
     build: ./weight
     ports:
-      - "8080:8080"
+      - "8080:5000"
     environment:
       - DB_HOST=weight-db
       - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
