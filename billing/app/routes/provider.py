@@ -7,6 +7,7 @@ provider_bp = Blueprint("provider", __name__)
 def create_provider(name: str):
     if not name:
         return None
+    con=None
     try:
         con = get_db_connection()
         cursor = con.cursor()
@@ -22,6 +23,7 @@ def create_provider(name: str):
         return None
 
 def update_provider(provider_id: str, new_name: str):
+    con=None
     try:
         con = get_db_connection()
         cursor = con.cursor()
@@ -37,18 +39,18 @@ def update_provider(provider_id: str, new_name: str):
         return False
 
 def get_all_providers():
-    
+    con=None
     try:
         con = get_db_connection()
         cursor = con.cursor()    
         cursor.execute("SELECT id, name FROM Provider")
+
         rows = cursor.fetchall()
         con.close()
         return [{"id": r[0], "name": r[1]} for r in rows]
     except Exception as e:
         if con:
             con.close()
-        print("Error in get_all_providers:", e, flush=True)
         return []
 
 # --- Routes ---
