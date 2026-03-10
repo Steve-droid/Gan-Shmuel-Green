@@ -7,17 +7,21 @@
 <!-- Filter form -->
 <div class="card border-0 bg-body-secondary mb-4">
   <div class="card-body p-4">
-    <form method="GET" class="row g-3 align-items-end">
+    <form id="query-form" method="GET" class="row g-3 align-items-end">
       <input type="hidden" name="submitted" value="1">
+      {% set fv = args.get('from', '') %}
+      {% set tv = args.get('to', '') %}
+      {% set from_dt = fv[:4]+'-'+fv[4:6]+'-'+fv[6:8]+'T'+fv[8:10]+':'+fv[10:12]+':'+fv[12:14] if fv|length == 14 else '' %}
+      {% set to_dt   = tv[:4]+'-'+tv[4:6]+'-'+tv[6:8]+'T'+tv[8:10]+':'+tv[10:12]+':'+tv[12:14] if tv|length == 14 else '' %}
       <div class="col-md-3">
         <label class="form-label fw-semibold">From</label>
-        <input type="text" class="form-control font-monospace" name="from"
-               placeholder="yyyymmddhhmmss" value="{{ args.get('from', '') }}">
+        <input type="datetime-local" class="form-control" name="from" id="q-from"
+               step="1" value="{{ from_dt }}">
       </div>
       <div class="col-md-3">
         <label class="form-label fw-semibold">To</label>
-        <input type="text" class="form-control font-monospace" name="to"
-               placeholder="yyyymmddhhmmss" value="{{ args.get('to', '') }}">
+        <input type="datetime-local" class="form-control" name="to" id="q-to"
+               step="1" value="{{ to_dt }}">
       </div>
       <div class="col-md-4">
         <label class="form-label fw-semibold">Direction Filter</label>
@@ -92,4 +96,18 @@
     </div>
   {% endif %}
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toApiFormat(val) {
+  return val ? val.replace(/[-T:]/g, '').padEnd(14, '0') : '';
+}
+document.getElementById('query-form').addEventListener('submit', function () {
+  ['q-from', 'q-to'].forEach(function (id) {
+    var el = document.getElementById(id);
+    el.value = toApiFormat(el.value);
+  });
+});
+</script>
 {% endblock %}
