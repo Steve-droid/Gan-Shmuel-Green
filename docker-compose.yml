@@ -17,10 +17,11 @@ services:
   billing:
     build: ./billing
     ports:
-      - "8081:5051"
+      - "8081:5001"
     environment:
       - DB_HOST=billing-db
       - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - WEIGHT_SERVICE_URL=http://weight:5000
     depends_on:
       - billing-db
     restart: unless-stopped
