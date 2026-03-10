@@ -190,6 +190,52 @@ def upsert_containers(containers: List['Container']) -> None:
     conn.close()
 
 
+def recalculate_pending_netos() -> int:
+    """After a batch upload, recalculate neto for 'out' transactions that previously had
+    unknown container taras (stored as NULL). Returns the number of rows updated."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+
+    # Find all out transactions where neto is still NULL
+    cursor.execute(
+        "SELECT * FROM transactions WHERE direction = 'out' AND neto IS NULL"
+    )
+    pending = cursor.fetchall()
+    cursor.close()
+
+    updated = 0
+    for out_row in pending:
+        session_id = out_row.get('sessionId')
+        truck_tara = out_row.get('truckTara')
+        if session_id is None or truck_tara is None:
+            continue
+
+        # Get the matching 'in' transaction to read bruto and containers
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT bruto, containers FROM transactions WHERE sessionId = %s AND direction = 'in' LIMIT 1",
+            (session_id,)
+        )
+        in_row = cursor.fetchone()
+        cursor.close()
+
+        if not in_row or in_row['bruto'] is None:
+            continue
+
+        container_ids = [c.strip() for c in (in_row['containers'] or '').split(',') if c.strip()]
+        taras = get_containers_tara(container_ids)
+
+        if None in taras.values():
+            continue  # still missing at least one tara
+
+        neto = in_row['bruto'] - truck_tara - sum(taras.values())
+        update_transaction(out_row['id'], {'neto': neto})
+        updated += 1
+
+    conn.close()
+    return updated
+
+
 def get_containers_tara(container_ids: List[str]) -> dict:
     """Get tara weights in KG for a list of container IDs.
     Returns {container_id: weight_kg} with None for containers not in the registry."""
