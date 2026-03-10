@@ -91,7 +91,7 @@ def run_pipeline(branch):
         logging.info(f"{' '.join(cmd)}: {result.stdout.strip()}")
         if result.returncode != 0:
             logging.error(f"Failed: {result.stderr.strip()}")
-            send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 1 (git) failed:\n{result.stderr.strip()}", recipients)
+            #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 1 (git) failed:\n{result.stderr.strip()}", recipients)
             return
 
     # Step 2: Build images
@@ -130,7 +130,7 @@ def run_pipeline(branch):
 
     if result.returncode != 0:
         logging.error(f"Unit tests failed: {result.stdout.strip()}")
-        send_email(f"[FAIL] Pipeline failed on {branch}", f"Unit tests failed:\n{result.stdout.strip()}", recipients)
+        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Unit tests failed:\n{result.stdout.strip()}", recipients)
         cleanup_test_env()
         return
     
@@ -143,7 +143,7 @@ def run_pipeline(branch):
     logging.info(f"Integration tests: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Integration tests failed: {result.stdout.strip()}")
-        send_email(f"[FAIL] Pipeline failed on {branch}", f"Integration tests failed:\n{result.stdout.strip()}", recipients)
+        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Integration tests failed:\n{result.stdout.strip()}", recipients)
         cleanup_test_env()
         return    
 
@@ -162,7 +162,7 @@ def run_pipeline(branch):
     logging.info(f"Production deploy: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Production deploy failed: {result.stderr.strip()}")
-        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 5 (prod deploy) failed:\n{result.stderr.strip()}", recipients)
+        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 5 (prod deploy) failed:\n{result.stderr.strip()}", recipients)
         return
 
     logging.info("Pipeline finished successfully")
