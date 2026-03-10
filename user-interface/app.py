@@ -47,7 +47,7 @@ def weight_record():
         r, err = call("post", WEIGHT_URL, "/weight", json=payload)
         if err:
             flash(err, "danger")
-        elif r.status_code == 200:
+        elif r.ok:
             result = r.json()
             flash("Weighing recorded successfully.", "success")
         else:
@@ -61,11 +61,15 @@ def weight_record():
 def weight_query():
     rows = None
     params = {k: v for k, v in request.args.items() if v}
+    # Checkboxes send filter=in&filter=out as separate keys; merge into one CSV string
+    filter_vals = request.args.getlist('filter')
+    if filter_vals:
+        params['filter'] = ','.join(filter_vals)
     if params or "submitted" in request.args:
         r, err = call("get", WEIGHT_URL, "/weight", params=params)
         if err:
             flash(err, "danger")
-        elif r.status_code == 200:
+        elif r.ok:
             rows = r.json()
         else:
             flash(f"Error {r.status_code}: {r.text}", "danger")
@@ -84,7 +88,7 @@ def weight_batch():
             r, err = call("post", WEIGHT_URL, "/batch-weight", json={"file": filename})
             if err:
                 flash(err, "danger")
-            elif r.status_code == 200:
+            elif r.ok:
                 flash(f"Batch loaded: {r.text}", "success")
             else:
                 flash(f"Error {r.status_code}: {r.text}", "danger")
@@ -99,7 +103,7 @@ def weight_unknown():
     if err:
         flash(err, "danger")
         items = []
-    elif r.status_code == 200:
+    elif r.ok:
         items = r.json()
     else:
         flash(f"Error {r.status_code}: {r.text}", "danger")
@@ -126,7 +130,7 @@ def lookup():
         r, err = call("get", WEIGHT_URL, f"/item/{item_id}", params=params)
         if err:
             flash(err, "danger")
-        elif r.status_code == 200:
+        elif r.ok:
             item_result = r.json()
         else:
             flash(f"Error {r.status_code}: {r.text}", "danger")
@@ -135,7 +139,7 @@ def lookup():
         r, err = call("get", WEIGHT_URL, f"/session/{session_id}")
         if err:
             flash(err, "danger")
-        elif r.status_code == 200:
+        elif r.ok:
             session_result = r.json()
         else:
             flash(f"Error {r.status_code}: {r.text}", "danger")
@@ -156,7 +160,7 @@ def billing_providers():
             r, err = call("post", BILLING_URL, "/provider", json={"name": name})
             if err:
                 flash(err, "danger")
-            elif r.status_code == 200:
+            elif r.ok:
                 data = r.json()
                 flash(f"Provider created with ID {data.get('id')}.", "success")
             else:
@@ -167,7 +171,7 @@ def billing_providers():
             r, err = call("put", BILLING_URL, f"/provider/{pid}", json={"name": name})
             if err:
                 flash(err, "danger")
-            elif r.status_code == 200:
+            elif r.ok:
                 flash("Provider updated.", "success")
             else:
                 flash(f"Error {r.status_code}: {r.text}", "danger")
@@ -188,7 +192,7 @@ def billing_trucks():
             r, err = call("post", BILLING_URL, "/truck", json=payload)
             if err:
                 flash(err, "danger")
-            elif r.status_code == 200:
+            elif r.ok:
                 flash("Truck registered.", "success")
             else:
                 flash(f"Error {r.status_code}: {r.text}", "danger")
@@ -198,7 +202,7 @@ def billing_trucks():
             r, err = call("put", BILLING_URL, f"/truck/{tid}", json={"provider": provider})
             if err:
                 flash(err, "danger")
-            elif r.status_code == 200:
+            elif r.ok:
                 flash("Truck updated.", "success")
             else:
                 flash(f"Error {r.status_code}: {r.text}", "danger")
@@ -210,7 +214,7 @@ def billing_trucks():
         r, err = call("get", BILLING_URL, f"/truck/{lookup_id}", params=params)
         if err:
             flash(err, "danger")
-        elif r.status_code == 200:
+        elif r.ok:
             truck_result = r.json()
         else:
             flash(f"Error {r.status_code}: {r.text}", "danger")
@@ -230,7 +234,7 @@ def billing_rates():
             r, err = call("post", BILLING_URL, "/rates", json={"file": filename})
             if err:
                 flash(err, "danger")
-            elif r.status_code == 200:
+            elif r.ok:
                 flash(f"Rates uploaded: {r.text}", "success")
             else:
                 flash(f"Error {r.status_code}: {r.text}", "danger")
@@ -262,7 +266,7 @@ def billing_bill():
         r, err = call("get", BILLING_URL, f"/bill/{provider_id}", params=params)
         if err:
             flash(err, "danger")
-        elif r.status_code == 200:
+        elif r.ok:
             bill = r.json()
         else:
             flash(f"Error {r.status_code}: {r.text}", "danger")

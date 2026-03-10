@@ -2,7 +2,7 @@
 .venv
 __pycache__/
 venv/
-uivenv/
 .venv/
 *.pyc
-
+.uivenv/
+uivenv/
