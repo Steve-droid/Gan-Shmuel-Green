@@ -15,6 +15,7 @@ from db import (
     update_transaction,
     get_last_transaction_for_truck,
     get_last_open_in_for_truck,
+    get_in_transaction_for_session,
     get_containers_tara,
     upsert_containers,
     get_item_type,
@@ -22,7 +23,6 @@ from db import (
     get_truck_last_tara_kg,
     get_sessions_for_truck,
     get_sessions_for_container,
-    
 )
 from entity_models import Transaction, Container
 
@@ -105,9 +105,10 @@ def post_weight():
         if direction == "none" and open_in is not None:
             return jsonify({"error": "none after in is not allowed"}), 400
 
-        # out without an in -> error
+        # out without an in -> error, unless force-overwriting a previous out
         if direction == "out" and open_in is None:
-            return jsonify({"error": "out without an in is not allowed"}), 400
+            if not (force and last_tx is not None and last_tx.direction == "out"):
+                return jsonify({"error": "out without an in is not allowed"}), 400
 
         # in followed by in -> error or force overwrite
         if direction == "in" and open_in is not None and not force:
@@ -140,11 +141,11 @@ def post_weight():
                 'produce': produce,
             })
             return jsonify({
-                'id': open_in.id,
+                'sessionId': open_in.session_id,
                 'truck': truck,
                 'bruto': bruto_kg
             }), 201
-            
+
         else:
             new_tx = Transaction(
             datetime=now,
@@ -159,33 +160,43 @@ def post_weight():
             )
 
             tx_id = insert_transaction(new_tx)
+            # sessionId = own transaction id (anchor for the paired "out")
             update_transaction(tx_id, {'sessionId': tx_id})
             return jsonify({
-                'id': tx_id,
+                'sessionId': tx_id,
                 'truck': truck,
                 'bruto': bruto_kg
             }), 201
 
     elif direction == "out":
-        session_id = open_in.session_id
+        # When force-overwriting a previous "out", open_in is None — fetch original "in" from DB
+        original_in = open_in if open_in is not None else get_in_transaction_for_session(last_tx.session_id)
+        session_id = original_in.session_id
         truck_tara = bruto_kg  # the "out" measurement is the truck's tara (empty weight)
 
-        container_taras = get_containers_tara(open_in.containers or [])
+        if bruto_kg >= original_in.bruto:
+            return jsonify({"error": f"Out weight ({bruto_kg} kg) must be less than in weight ({original_in.bruto} kg) for this session"}), 400
+
+        # Containers and produce are not recorded on exit
+        containers_list = []
+        produce = "na"
+
+        container_taras = get_containers_tara(original_in.containers or [])
         if None in container_taras.values():
             neto = "na"
         else:
-            neto = open_in.bruto - truck_tara - sum(container_taras.values())
+            neto = original_in.bruto - truck_tara - sum(container_taras.values())
 
         if last_tx and last_tx.direction == "out" and force:
             # Overwrite existing "out" row in place with same id and sessionId, new data
             update_transaction(last_tx.id, {
                 'datetime': now,
                 'truck': truck,
-                'containers': ','.join(containers_list),
+                'containers': '',
                 'bruto': bruto_kg,
                 'truckTara': truck_tara,
                 'neto': neto if isinstance(neto, int) else None,
-                'produce': produce,
+                'produce': 'na',
             })
         else:
             new_tx = Transaction(
@@ -201,7 +212,7 @@ def post_weight():
             )
             insert_transaction(new_tx)
         return jsonify({
-            'id': session_id,
+            'sessionId': session_id,
             'truck': truck,
             'bruto': bruto_kg,
             'truckTara': truck_tara,
@@ -222,7 +233,7 @@ def post_weight():
         )
         tx_id = insert_transaction(new_tx)
         return jsonify({
-            'id': tx_id,
+            'sessionId': tx_id,
             'truck': truck,
             'bruto': bruto_kg
         }), 201
@@ -286,9 +297,9 @@ def get_weights():
 
         # 3. Build the query with the dynamic placeholders
         query = f"""
-            SELECT id, direction, bruto, neto, produce, containers 
-            FROM transactions 
-            WHERE datetime BETWEEN %s AND %s 
+            SELECT id, sessionId, direction, bruto, neto, produce, containers
+            FROM transactions
+            WHERE datetime BETWEEN %s AND %s
             AND direction IN ({placeholders})
         """
         
@@ -307,13 +318,11 @@ def get_weights():
         formatted_response = []
         for row in results:
             formatted_response.append({
-                "id": row["id"],
+                "sessionId": row["sessionId"],
                 "direction": row["direction"],
-                "bruto": row["bruto"], # Assumed stored as KG
-                # Handle "na" for neto if tara was unknown (NULL in DB)
+                "bruto": row["bruto"],
                 "neto": row["neto"] if row["neto"] is not None else "na",
                 "produce": row["produce"],
-                # Convert "c1,c2" string into list ["c1", "c2"]
                 "containers": row["containers"].split(",") if row["containers"] else []
             })
 
