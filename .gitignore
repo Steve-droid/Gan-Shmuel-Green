@@ -1,12 +1,14 @@
-
 # Environment variables / credentials                                         
-
 .env
+*.env
+.env.test
+
 
 # Python artifacts
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 
 # SSH keys
 *.pem
@@ -17,3 +19,9 @@ __pycache__/
 venv/
 .uivenv/
 uivenv/
+
+# OS
+.DS_Store
+
+# Billing
+billing/in
