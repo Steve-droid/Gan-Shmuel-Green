@@ -113,11 +113,11 @@ def test_out_after_out_without_force_returns_400(mock_last_tx, mock_open_in, cli
 
 # ─── Happy Path ───────────────────────────────────────────────────────────────
 
-@patch("app.insert_transaction", return_value=1001)
-@patch("app.get_last_open_in_for_truck", return_value=None)
+@patch("app.update_transaction")
 @patch("app.get_last_transaction_for_truck", return_value=None)
-@patch("app.update_transaction") 
-def test_normal_in(mock_last_tx, mock_open_in, mock_insert, client):
+@patch("app.get_last_open_in_for_truck", return_value=None)
+@patch("app.insert_transaction", return_value=1001)
+def test_normal_in(mock_insert, mock_open_in, mock_last_tx, mock_update, client):
     resp = client.post("/weight", json={
         "direction": "in", "truck": "T1",
         "weight": 10000, "unit": "kg",

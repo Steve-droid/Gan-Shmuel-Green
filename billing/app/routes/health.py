@@ -10,7 +10,7 @@ def health():
         cursor = con.cursor()
         cursor.execute("SELECT 1")
         con.close()
-        return "OK", 200
+        return jsonify({"status": "OK"}), 200
     except Exception:
         return "Failure", 500
     

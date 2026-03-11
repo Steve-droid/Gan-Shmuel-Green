@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Gan Shmuel — System Status</title>
+  <style>
+    body { font-family: sans-serif; background: #f4f4f4; padding: 2rem; }
+    h1 { color: #333; }
+    table { border-collapse: collapse; width: 100%; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    th { background: #333; color: white; padding: 0.75rem 1rem; text-align: left; }
+    td { padding: 0.75rem 1rem; border-bottom: 1px solid #eee; }
+    .running { color: green; font-weight: bold; }
+    .exited  { color: red;   font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>System Status</h1>
+  <table>
+    <tr>
+      <th>Container</th>
+      <th>Image</th>
+      <th>Status</th>
+      <th>Ports</th>
+    </tr>
+    {% for c in containers %}
+    <tr>
+      <td>{{ c.name }}</td>
+      <td>{{ c.image }}</td>
+      <td class="{{ c.status }}">{{ c.status }}</td>
+      <td>{{ c.ports }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  
+  <style>
+  /* Container for the log section */
+  .log-container {
+    margin-top: 2rem;
+    background: #2d2d2d;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    border: 1px solid #1a1a1a;
+  }
+
+  /* Terminal-style header bar */
+  .log-header {
+    background: #1a1a1a;
+    padding: 8px 15px;
+    display: flex;
+    align-items: center;
+    color: #aaa;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* The actual scrollable pre area */
+  .log-body {
+    margin: 0;
+    padding: 15px;
+    color: #f1f1f1;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    height: 400px; /* Fixed height */
+    overflow-y: auto; /* Vertical scroll */
+    overflow-x: hidden; /* Prevent horizontal scroll */
+    white-space: pre-wrap; /* Wrap long lines */
+    word-break: break-all;
+    background: #2d2d2d;
+  }
+
+  /* Custom scrollbar to match the dark theme */
+  .log-body::-webkit-scrollbar {
+    width: 8px;
+  }
+  .log-body::-webkit-scrollbar-track {
+    background: #2d2d2d;
+  }
+  .log-body::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
+  }
+  .log-body::-webkit-scrollbar-thumb:hover {
+    background: #555;
+  }
+</style>
+
+<div class="log-container">
+  <div class="log-header">
+    CI Output Console
+  </div>
+  <pre id="ci-logs" class="log-body">{{ ci_logs }}</pre>
+</div>
+
+<script>
+  // Automatically scroll to the bottom on load to see newest logs
+  const logElement = document.getElementById('ci-logs');
+  logElement.scrollTop = logElement.scrollHeight;
+</script>
+</div>
+</body>
+</html>

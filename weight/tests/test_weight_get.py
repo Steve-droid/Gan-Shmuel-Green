@@ -53,7 +53,7 @@ def test_get_weights_empty(mock_get_db, client):
     
     data = response.get_json()
     assert response.status_code == 200
-    assert "No weighing sessions exist" in data["message"]
+    assert data == []
 
 # 3. Test Edge Case: Invalid Date Format (400)
 def test_get_weights_invalid_date(client):

@@ -311,9 +311,7 @@ def get_weights():
         results = cursor.fetchall()
         
         if not results:
-            return jsonify({
-                "message": f"No weighing sessions exist for the requested time range ({t1} to {t2})"
-            }), 200
+            return jsonify([]), 200
 
         # --- THE MODIFICATION: FORMATTING EACH OBJECT ---
         formatted_response = []
