@@ -1,6 +1,7 @@
 import pytest
 import requests
 import os
+from datetime import datetime, timedelta
 # Use the service name defined in your docker-compose.yml
 WEIGHT_URL = os.getenv("WEIGHT_SERVICE_URL", "http://localhost:8082")
 
@@ -94,8 +95,10 @@ def test_post_weight_out(shared_data):
 
 # 6. Test GET /weight (List) - must run after out to have a complete session
 def test_get_weight_list():
-    # Test with default range
-    response = requests.get(f"{WEIGHT_URL}/weight")
+    # Pass explicit `to` 2 seconds in the future to avoid sub-second timing race
+    # where sessions written in the current second are excluded by the default `to=now`
+    t2 = (datetime.now() + timedelta(seconds=2)).strftime('%Y%m%d%H%M%S')
+    response = requests.get(f"{WEIGHT_URL}/weight", params={"to": t2})
     assert response.status_code == 200
     assert isinstance(response.json(), list)
     assert len(response.json()) > 0
@@ -103,7 +106,8 @@ def test_get_weight_list():
 # 7. Test GET /item/<id> - must run after out to have sessions populated
 def test_get_item(shared_data):
     truck_id = shared_data["truck_id"]
-    response = requests.get(f"{WEIGHT_URL}/item/{truck_id}")
+    t2 = (datetime.now() + timedelta(seconds=2)).strftime('%Y%m%d%H%M%S')
+    response = requests.get(f"{WEIGHT_URL}/item/{truck_id}", params={"to": t2})
     assert response.status_code == 200
 
     data = response.json()
