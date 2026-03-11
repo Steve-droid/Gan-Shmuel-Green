@@ -117,8 +117,8 @@ def run_pipeline(branch):
         #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 3 (test deploy) failed:\n{result.stderr.strip()}", recipients)
         return
 
-    # Wait for containers to finish booting
-    time.sleep(5)
+    # Wait for containers to finish booting (MySQL init takes longer on EC2)
+    time.sleep(10)
 
     # Step 4: Run tests
     # Step 4a-i: Billing unit tests (run inside the billing test container which has all deps)
