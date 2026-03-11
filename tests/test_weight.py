@@ -1,12 +1,10 @@
 import pytest
 import requests
 import os
-import time
-
 # Use the service name defined in your docker-compose.yml
-WEIGHT_URL = os.getenv("WEIGHT_SERVICE_URL", "http://weight-app:5000")
+WEIGHT_URL = os.getenv("WEIGHT_SERVICE_URL", "http://localhost:8082")
 
-#0 test heath endpoint to ensure container is up before running other tests
+# 0 test heath endpoint to ensure container is up before running other tests
 def test_app_health_endpoint():
     """
     CI Test: Checks if the remote Flask app container 
@@ -16,7 +14,6 @@ def test_app_health_endpoint():
     
     try:
         response = requests.get(endpoint, timeout=5)
-        
         # Assertions
         assert response.status_code == 200
         data = response.json()
@@ -49,7 +46,7 @@ def test_post_weight_in(shared_data):
     payload = {
         "truck": shared_data["truck_id"],
         "direction": "in",
-        "weight": 10000,
+        "weight": 4000,
         "unit": "kg",
         "produce": "apples",
         "containers": shared_data["container_id"]
@@ -59,9 +56,43 @@ def test_post_weight_in(shared_data):
     
     data = response.json()
     assert data["truck"] == shared_data["truck_id"]
-    shared_data["session_id"] = data["id"] # Save for next tests
+    shared_data["session_id"] = data["sessionId"] # Save for next tests
 
-# 3. Test GET /weight (List)
+# 3. Test GET /session/<id>
+def test_get_session(shared_data):
+    sess_id = shared_data["session_id"]
+    response = requests.get(f"{WEIGHT_URL}/session/{sess_id}")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["id"] == sess_id
+    assert data["truck"] == shared_data["truck_id"]
+
+# 4. Test GET /unknown
+def test_get_unknown():
+    response = requests.get(f"{WEIGHT_URL}/unknown")
+    assert response.status_code == 200
+    # Since C-999 was used in test_post_weight_in but likely isn't
+    # in the DB registry yet, it should appear here.
+    assert isinstance(response.json(), list)
+
+# 5. Test POST /weight (OUT) - Closing the cycle
+def test_post_weight_out(shared_data):
+    payload = {
+        "truck": shared_data["truck_id"],
+        "direction": "out",
+        "weight": 2000, # Truck is lighter now
+        "unit": "kg"
+    }
+    response = requests.post(f"{WEIGHT_URL}/weight", json=payload)
+    assert response.status_code == 201
+
+    data = response.json()
+    assert data["truck"] == shared_data["truck_id"]
+    # Check that it returned a neto (or "na" if container was unknown)
+    assert "neto" in data
+
+# 6. Test GET /weight (List) - must run after out to have a complete session
 def test_get_weight_list():
     # Test with default range
     response = requests.get(f"{WEIGHT_URL}/weight")
@@ -69,46 +100,12 @@ def test_get_weight_list():
     assert isinstance(response.json(), list)
     assert len(response.json()) > 0
 
-# 4. Test GET /session/<id>
-def test_get_session(shared_data):
-    sess_id = shared_data["session_id"]
-    response = requests.get(f"{WEIGHT_URL}/session/{sess_id}")
-    assert response.status_code == 200
-    
-    data = response.json()
-    assert data["id"] == sess_id
-    assert data["truck"] == shared_data["truck_id"]
-
-# 5. Test GET /item/<id>
+# 7. Test GET /item/<id> - must run after out to have sessions populated
 def test_get_item(shared_data):
     truck_id = shared_data["truck_id"]
     response = requests.get(f"{WEIGHT_URL}/item/{truck_id}")
     assert response.status_code == 200
-    
+
     data = response.json()
     assert data["id"] == truck_id
     assert shared_data["session_id"] in data["sessions"]
-
-# 6. Test GET /unknown
-def test_get_unknown(shared_data):
-    response = requests.get(f"{WEIGHT_URL}/unknown")
-    assert response.status_code == 200
-    # Since C-999 was used in test_post_weight_in but likely isn't 
-    # in the DB registry yet, it should appear here.
-    assert isinstance(response.json(), list)
-
-# 7. Test POST /weight (OUT) - Closing the cycle
-def test_post_weight_out(shared_data):
-    payload = {
-        "truck": shared_data["truck_id"],
-        "direction": "out",
-        "weight": 5000, # Truck is lighter now
-        "unit": "kg"
-    }
-    response = requests.post(f"{WEIGHT_URL}/weight", json=payload)
-    assert response.status_code == 201
-    
-    data = response.json()
-    assert data["truck"] == shared_data["truck_id"]
-    # Check that it returned a neto (or "na" if container was unknown)
-    assert "neto" in data

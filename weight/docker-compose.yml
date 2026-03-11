@@ -1,0 +1,50 @@
+services:
+  db:
+    image: mysql:8
+    container_name: weight-db
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: weight
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-prootpass"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - weight-net
+
+  app:
+    build: .
+    container_name: weight-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_USER: root
+      DB_PASSWORD: rootpass
+      DB_NAME: weight
+      DB_PORT: 3306
+      IN_FOLDER: /app/in
+    ports:
+      - "5002:5000"
+    volumes:
+      - ./in:/app/in
+    command: >
+      sh -c "python -c 'from db import init_db; init_db()' &&
+             python app.py"
+    networks:
+      - weight-net
+      - gan-shmuel-net
+
+volumes:
+  mysql_data:
+
+networks:
+  weight-net:
+  gan-shmuel-net:
+    external: true

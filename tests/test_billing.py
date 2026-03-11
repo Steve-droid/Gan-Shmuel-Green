@@ -4,7 +4,7 @@ import os
 
 # Get the URL of the app container from environment variables
 # Default to localhost if not set (for local testing)
-BILLING_URL = os.getenv("BILLING_URL", "http://billing-app:5000")
+BILLING_URL = os.getenv("BILLING_URL", "http://localhost:8083")
 
 def test_app_health_endpoint():
     """
@@ -23,12 +23,6 @@ def test_app_health_endpoint():
         
     except requests.exceptions.ConnectionError:
         pytest.fail(f"Could not connect to the App at {endpoint}. Is the container running?")
-    import pytest
-import requests
-import os
-
-# Configuration from environment
-BILLING_URL = os.getenv("BILLING_URL", "http://billing-service:5000")
 
 @pytest.fixture(scope="module")
 def state():
@@ -67,26 +61,20 @@ def test_post_truck(state):
         "id": state["truck_id"],
         "provider_id": state["provider_id"]
     }
-    response = requests.post(f"{BILLING_URL}/trucks", json=payload)
+    response = requests.post(f"{BILLING_URL}/truck", json=payload)
     assert response.status_code == 201
 
 def test_get_truck_details(state):
     t_id = state["truck_id"]
-    response = requests.get(f"{BILLING_URL}/trucks/{t_id}")
+    response = requests.get(f"{BILLING_URL}/truck/{t_id}")
     assert response.status_code == 200
     assert response.json()["id"] == t_id
 
 # --- Rates Tests ---
 
 def test_post_rates(state):
-    # Testing rate for a specific provider
-    payload = {
-        "product_id": state["product_id"],
-        "rate": 150,
-        "scope": str(state["provider_id"])
-    }
-    response = requests.post(f"{BILLING_URL}/rates", json=payload)
-    assert response.status_code == 201
+    response = requests.post(f"{BILLING_URL}/rates", params={"file": "rates.xlsx"})
+    assert response.status_code == 200
 
 def test_get_rates():
     response = requests.get(f"{BILLING_URL}/rates")

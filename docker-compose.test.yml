@@ -29,7 +29,10 @@ services:
       - "8082:5000"
     environment:
       - DB_HOST=weight-db
+      - DB_USER=root
       - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - DB_NAME=weight
+      - DB_PORT=3306
     depends_on:
       - weight-db
     restart: unless-stopped
