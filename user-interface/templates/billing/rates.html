@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Rates{% endblock %}
+
+{% block content %}
+<h2 class="mb-4 fw-bold">Rates</h2>
+
+<div class="row g-4">
+  <!-- Upload -->
+  <div class="col-lg-6">
+    <div class="card border-0 bg-body-secondary h-100">
+      <div class="card-body p-4">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-upload me-2 text-primary"></i>Upload Rates File</h6>
+        <p class="text-muted small mb-4">
+          Load an Excel file from the billing service's <code>/in</code> folder.
+        </p>
+        <form method="POST">
+          <div class="mb-4">
+            <label for="filename" class="form-label fw-semibold">Filename</label>
+            <input type="text" class="form-control font-monospace" id="filename" name="filename"
+                   placeholder="rates.xlsx" required>
+            <div class="form-text">File must be in the billing service <code>/in</code> folder.</div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-cloud-upload me-2"></i>Upload Rates
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Download -->
+  <div class="col-lg-6">
+    <div class="card border-0 bg-body-secondary h-100">
+      <div class="card-body p-4">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-download me-2 text-success"></i>Download Current Rates</h6>
+        <p class="text-muted small mb-4">
+          Export the current pricing table as an Excel file.
+        </p>
+        <a href="{{ url_for('billing_rates_download') }}" class="btn btn-success w-100">
+          <i class="bi bi-file-earmark-excel me-2"></i>Download rates.xlsx
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-4 p-4 bg-body-secondary rounded">
+  <h6 class="fw-semibold mb-2">Expected File Format</h6>
+  <p class="text-muted small mb-2">Excel file with three columns:</p>
+  <table class="table table-sm table-bordered w-auto">
+    <thead class="table-dark">
+      <tr><th>Product</th><th>Rate</th><th>Scope</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>orange</td><td>200</td><td>ALL</td></tr>
+      <tr><td>tomato</td><td>250</td><td>ALL</td></tr>
+      <tr><td>oranges</td><td>210</td><td>provider_5</td></tr>
+    </tbody>
+  </table>
+  <p class="text-muted small mb-0">
+    Rates are in <strong>agorot</strong> per kg (100 agorot = 1 ₪).
+    Provider-specific rates override the <code>ALL</code> rate for that provider.
+  </p>
+</div>
+{% endblock %}

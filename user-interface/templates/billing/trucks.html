@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Trucks{% endblock %}
+
+{% block content %}
+<h2 class="mb-4 fw-bold">Trucks</h2>
+
+<div class="row g-4 mb-4">
+  <!-- Register -->
+  <div class="col-lg-4">
+    <div class="card border-0 bg-body-secondary h-100">
+      <div class="card-body p-4">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-plus-circle me-2 text-success"></i>Register Truck</h6>
+        <form method="POST">
+          <input type="hidden" name="action" value="register">
+          <div class="mb-3">
+            <label class="form-label">Truck License Plate</label>
+            <input type="text" class="form-control font-monospace" name="truck_id"
+                   placeholder="T-14409" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Provider ID</label>
+            <input type="text" class="form-control font-monospace" name="provider_id"
+                   placeholder="e.g. 3" required>
+          </div>
+          <button type="submit" class="btn btn-success w-100">
+            <i class="bi bi-plus-circle me-2"></i>Register
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reassign -->
+  <div class="col-lg-4">
+    <div class="card border-0 bg-body-secondary h-100">
+      <div class="card-body p-4">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-arrow-left-right me-2 text-warning"></i>Reassign Truck</h6>
+        <form method="POST">
+          <input type="hidden" name="action" value="update">
+          <div class="mb-3">
+            <label class="form-label">Truck License Plate</label>
+            <input type="text" class="form-control font-monospace" name="truck_id"
+                   placeholder="T-14409" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">New Provider ID</label>
+            <input type="text" class="form-control font-monospace" name="provider_id"
+                   placeholder="e.g. 5" required>
+          </div>
+          <button type="submit" class="btn btn-warning w-100 text-dark">
+            <i class="bi bi-arrow-left-right me-2"></i>Reassign
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Look up -->
+  <div class="col-lg-4">
+    <div class="card border-0 bg-body-secondary h-100">
+      <div class="card-body p-4">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-search me-2 text-info"></i>Look Up Truck</h6>
+        <form method="GET" class="row g-2">
+          <div class="col-12">
+            <input type="text" class="form-control font-monospace" name="truck_id"
+                   placeholder="T-14409" value="{{ args.get('truck_id', '') }}">
+          </div>
+          <div class="col-6">
+            <input type="text" class="form-control font-monospace" name="from"
+                   placeholder="From" value="{{ args.get('from', '') }}">
+          </div>
+          <div class="col-6">
+            <input type="text" class="form-control font-monospace" name="to"
+                   placeholder="To" value="{{ args.get('to', '') }}">
+          </div>
+          <div class="col-12">
+            <button type="submit" class="btn btn-info w-100 text-dark">
+              <i class="bi bi-search me-1"></i>Look Up
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Truck lookup result -->
+{% if truck_result %}
+<div class="card border-0 border-start border-info border-3 bg-body-secondary">
+  <div class="card-body p-4">
+    <h5 class="fw-semibold mb-3">
+      <i class="bi bi-truck me-2 text-info"></i>Truck: {{ truck_result.id }}
+    </h5>
+    <div class="row g-3 mb-3">
+      <div class="col-md-4">
+        <div class="text-muted small">Tare Weight</div>
+        <div class="fs-5 fw-semibold font-monospace">
+          {% if truck_result.tara not in (none, "na") %}
+            {{ truck_result.tara }} kg
+          {% else %}
+            <span class="text-warning">Unknown</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="text-muted small mb-2">Sessions ({{ truck_result.sessions|length }})</div>
+    {% if truck_result.sessions %}
+    <div class="d-flex flex-wrap gap-2">
+      {% for sid in truck_result.sessions %}
+      <a href="{{ url_for('lookup') }}?session_id={{ sid }}" class="badge bg-info text-dark text-decoration-none font-monospace">
+        {{ sid }}
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+      <span class="text-muted">No sessions in range</span>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

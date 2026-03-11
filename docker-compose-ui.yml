@@ -1,0 +1,104 @@
+services:
+
+  # ── Weight ──────────────────────────────────────────────────────────────────
+
+  weight-db:
+    build:
+      context: .
+      dockerfile: weight/weight-db/Dockerfile
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: weight
+    volumes:
+      - weight-db-data:/var/lib/mysql
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  weight:
+    build: ./weight
+    ports:
+      - "5003:5000"
+    environment:
+      DB_HOST: weight-db
+      DB_USER: root
+      DB_PASSWORD: rootpass
+      DB_NAME: weight
+      DB_PORT: 3306
+      IN_FOLDER: /app/in
+    volumes:
+      - ./weight/in:/app/in
+    depends_on:
+      weight-db:
+        condition: service_healthy
+    networks:
+      - app-net
+
+  # ── Billing ─────────────────────────────────────────────────────────────────
+
+  billing-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: billdb
+    volumes:
+      - billing-db-data:/var/lib/mysql
+      - ./billing/app/db:/docker-entrypoint-initdb.d
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  billing:
+    build: ./billing
+    ports:
+      - "5002:5001"
+    environment:
+      DB_HOST: billing-db
+      DB_USER: root
+      DB_PASSWORD: rootpass
+      DB_NAME: billdb
+      WEIGHT_SERVICE_URL: http://weight:5000
+    volumes:
+      - ./billing/in:/app/in
+    depends_on:
+      billing-db:
+        condition: service_healthy
+      weight:
+        condition: service_started
+    networks:
+      - app-net
+
+  # ── UI ───────────────────────────────────────────────────────────────────────
+
+  ui:
+    build: ./user-interface
+    ports:
+      - "5000:5000"
+    environment:
+      WEIGHT_URL: http://weight:5000
+      BILLING_URL: http://billing:5001
+      PORT: 5000
+      SECRET_KEY: change-me-in-production
+    depends_on:
+      - weight
+      - billing
+    networks:
+      - app-net
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  weight-db-data:
+  billing-db-data:
