@@ -122,6 +122,13 @@ def run_pipeline(branch):
 
     # Step 4: Run tests
     # Step 4a-i: Billing unit tests (run inside the billing test container which has all deps)
+    # billing/.dockerignore excludes tests/ and conftest.py from the image, so we copy them in first
+    for src, dst in [
+        (f'{REPO_DIR}/billing/tests', 'gan-shmuel-test-billing-1:/app/tests'),
+        (f'{REPO_DIR}/billing/conftest.py', 'gan-shmuel-test-billing-1:/app/conftest.py'),
+    ]:
+        subprocess.run(['docker', 'cp', src, dst], capture_output=True, text=True)
+
     result = subprocess.run(
         ['docker', 'exec', 'gan-shmuel-test-billing-1',
          'sh', '-c', 'pip install pytest -q && python -m pytest tests/ -v --ignore=tests/test_integration.py'],
