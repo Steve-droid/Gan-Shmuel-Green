@@ -59,6 +59,7 @@
           <th>Neto (kg)</th>
           <th>Produce</th>
           <th>Containers</th>
+          <th>Datetime</th>
         </tr>
       </thead>
       <tbody>
@@ -82,10 +83,14 @@
           <td>{{ row.neto }}</td>
           <td>{{ row.produce or "—" }}</td>
           <td class="font-monospace small text-muted">{{ row.containers or "—" }}</td>
+          <td>{{ row.datetime }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    <!-- removed for brevity -->
+    <!-- <pre>{{ raw|tojson(indent=2) }}</pre> -->
+    <!-- removed for brevity -->
   </div>
   {% else %}
     <div class="text-center text-muted py-5">

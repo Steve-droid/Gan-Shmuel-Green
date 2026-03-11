@@ -298,7 +298,7 @@ def get_weights():
 
         # 3. Build the query with the dynamic placeholders
         query = f"""
-            SELECT id, sessionId, direction, bruto, neto, produce, containers
+            SELECT id, sessionId, direction, bruto, neto, produce, containers, datetime
             FROM transactions
             WHERE datetime BETWEEN %s AND %s
             AND direction IN ({placeholders})
@@ -322,7 +322,8 @@ def get_weights():
                 "bruto": row["bruto"],
                 "neto": row["neto"] if row["neto"] is not None else "na",
                 "produce": row["produce"],
-                "containers": row["containers"].split(",") if row["containers"] else []
+                "containers": row["containers"].split(",") if row["containers"] else [],
+                "datetime": row["datetime"].strftime('%Y-%m-%d %H:%M:%S')
             })
 
         cursor.close()
