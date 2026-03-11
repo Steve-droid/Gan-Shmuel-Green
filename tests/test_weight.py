@@ -4,7 +4,7 @@ import os
 # Use the service name defined in your docker-compose.yml
 WEIGHT_URL = os.getenv("WEIGHT_SERVICE_URL", "http://localhost:8082")
 
-#0 test heath endpoint to ensure container is up before running other tests
+# 0 test heath endpoint to ensure container is up before running other tests
 def test_app_health_endpoint():
     """
     CI Test: Checks if the remote Flask app container 
@@ -14,7 +14,6 @@ def test_app_health_endpoint():
     
     try:
         response = requests.get(endpoint, timeout=5)
-        
         # Assertions
         assert response.status_code == 200
         data = response.json()
@@ -47,7 +46,7 @@ def test_post_weight_in(shared_data):
     payload = {
         "truck": shared_data["truck_id"],
         "direction": "in",
-        "weight": 10000,
+        "weight": 4000,
         "unit": "kg",
         "produce": "apples",
         "containers": shared_data["container_id"]
@@ -70,7 +69,7 @@ def test_get_session(shared_data):
     assert data["truck"] == shared_data["truck_id"]
 
 # 4. Test GET /unknown
-def test_get_unknown(shared_data):
+def test_get_unknown():
     response = requests.get(f"{WEIGHT_URL}/unknown")
     assert response.status_code == 200
     # Since C-999 was used in test_post_weight_in but likely isn't
@@ -82,7 +81,7 @@ def test_post_weight_out(shared_data):
     payload = {
         "truck": shared_data["truck_id"],
         "direction": "out",
-        "weight": 5000, # Truck is lighter now
+        "weight": 2000, # Truck is lighter now
         "unit": "kg"
     }
     response = requests.post(f"{WEIGHT_URL}/weight", json=payload)
