@@ -19,12 +19,7 @@ RUN git config --global pull.ff only
 WORKDIR /app
 
 COPY ci/requirements.txt .
-COPY billing/requirements.txt billing-requirements.txt
-COPY weight/requirements.txt weight-requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt \
-    -r billing-requirements.txt \
-    -r weight-requirements.txt && \
-    rm billing-requirements.txt weight-requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ci/app.py .
 COPY ci/auth.py .

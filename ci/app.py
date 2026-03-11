@@ -121,11 +121,11 @@ def run_pipeline(branch):
     time.sleep(5)
 
     # Step 4: Run tests
-    # Step 4a-i: Billing unit tests
+    # Step 4a-i: Billing unit tests (run inside the billing test container which has all deps)
     result = subprocess.run(
-        ['python', '-m', 'pytest', 'billing/tests/', '-v',
-         '--ignore=billing/tests/test_integration.py'],
-        cwd=REPO_DIR, capture_output=True, text=True
+        ['docker', 'exec', 'gan-shmuel-test-billing-1',
+         'sh', '-c', 'pip install pytest -q && python -m pytest tests/ -v --ignore=tests/test_integration.py'],
+        capture_output=True, text=True
     )
 
     logging.info(f"Billing tests: {result.stdout.strip()}")
@@ -136,12 +136,13 @@ def run_pipeline(branch):
         cleanup_test_env()
         return
 
-    # Step 4a-ii: Weight unit tests
+    # Step 4a-ii: Weight unit tests (run inside the weight test container which has all deps)
     result = subprocess.run(
-        ['python', '-m', 'pytest', 'weight/tests/', '-v',
-         '--ignore=weight/tests/test_e2e.py',
-         '--ignore=weight/tests/test_db_functions_day2.py'],
-        cwd=REPO_DIR, capture_output=True, text=True
+        ['docker', 'exec', 'gan-shmuel-test-weight-1',
+         'python', '-m', 'pytest', 'tests/', '-v',
+         '--ignore=tests/test_e2e.py',
+         '--ignore=tests/test_db_functions_day2.py'],
+        capture_output=True, text=True
     )
 
     logging.info(f"Weight tests: {result.stdout.strip()}")
