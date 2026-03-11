@@ -7,7 +7,11 @@
 <!-- Query form -->
 <div class="card border-0 bg-body-secondary mb-4">
   <div class="card-body p-4">
-    <form method="GET" class="row g-3 align-items-end">
+    {% set fv = args.get('from', '') %}
+    {% set tv = args.get('to', '') %}
+    {% set from_dt = fv[:4]+'-'+fv[4:6]+'-'+fv[6:8]+'T'+fv[8:10]+':'+fv[10:12]+':'+fv[12:14] if fv|length == 14 else '' %}
+    {% set to_dt   = tv[:4]+'-'+tv[4:6]+'-'+tv[6:8]+'T'+tv[8:10]+':'+tv[10:12]+':'+tv[12:14] if tv|length == 14 else '' %}
+    <form id="bill-form" method="GET" class="row g-3 align-items-end">
       <div class="col-md-3">
         <label class="form-label fw-semibold">Provider ID <span class="text-danger">*</span></label>
         <input type="text" class="form-control font-monospace" name="provider_id"
@@ -15,14 +19,14 @@
       </div>
       <div class="col-md-3">
         <label class="form-label fw-semibold">From</label>
-        <input type="text" class="form-control font-monospace" name="from"
-               placeholder="yyyymmddhhmmss" value="{{ args.get('from', '') }}">
+        <input type="datetime-local" class="form-control" id="b-from"
+               step="1" value="{{ from_dt }}">
         <div class="form-text">Defaults to 1st of current month</div>
       </div>
       <div class="col-md-3">
         <label class="form-label fw-semibold">To</label>
-        <input type="text" class="form-control font-monospace" name="to"
-               placeholder="yyyymmddhhmmss" value="{{ args.get('to', '') }}">
+        <input type="datetime-local" class="form-control" id="b-to"
+               step="1" value="{{ to_dt }}">
         <div class="form-text">Defaults to now</div>
       </div>
       <div class="col-md-3">
@@ -121,4 +125,25 @@
 {% endif %}
 
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toApiFormat(val) {
+  return val ? val.replace(/[-T:]/g, '').padEnd(14, '0') : '';
+}
+document.getElementById('bill-form').addEventListener('submit', function () {
+  ['b-from', 'b-to'].forEach(function (id) {
+    var el = document.getElementById(id);
+    var apiVal = toApiFormat(el.value);
+    if (apiVal) {
+      var hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = id === 'b-from' ? 'from' : 'to';
+      hidden.value = apiVal;
+      document.getElementById('bill-form').appendChild(hidden);
+    }
+  });
+});
+</script>
 {% endblock %}

@@ -60,18 +60,24 @@
     <div class="card border-0 bg-body-secondary h-100">
       <div class="card-body p-4">
         <h6 class="fw-semibold mb-3"><i class="bi bi-search me-2 text-info"></i>Look Up Truck</h6>
-        <form method="GET" class="row g-2">
+        {% set fv = args.get('from', '') %}
+        {% set tv = args.get('to', '') %}
+        {% set from_dt = fv[:4]+'-'+fv[4:6]+'-'+fv[6:8]+'T'+fv[8:10]+':'+fv[10:12]+':'+fv[12:14] if fv|length == 14 else '' %}
+        {% set to_dt   = tv[:4]+'-'+tv[4:6]+'-'+tv[6:8]+'T'+tv[8:10]+':'+tv[10:12]+':'+tv[12:14] if tv|length == 14 else '' %}
+        <form id="truck-lookup-form" method="GET" class="row g-2">
           <div class="col-12">
             <input type="text" class="form-control font-monospace" name="truck_id"
                    placeholder="T-14409" value="{{ args.get('truck_id', '') }}">
           </div>
           <div class="col-6">
-            <input type="text" class="form-control font-monospace" name="from"
-                   placeholder="From" value="{{ args.get('from', '') }}">
+            <label class="form-label fw-semibold">From</label>
+            <input type="datetime-local" class="form-control" id="t-from"
+                   step="1" value="{{ from_dt }}">
           </div>
           <div class="col-6">
-            <input type="text" class="form-control font-monospace" name="to"
-                   placeholder="To" value="{{ args.get('to', '') }}">
+            <label class="form-label fw-semibold">To</label>
+            <input type="datetime-local" class="form-control" id="t-to"
+                   step="1" value="{{ to_dt }}">
           </div>
           <div class="col-12">
             <button type="submit" class="btn btn-info w-100 text-dark">
@@ -118,4 +124,25 @@
   </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toApiFormat(val) {
+  return val ? val.replace(/[-T:]/g, '').padEnd(14, '0') : '';
+}
+document.getElementById('truck-lookup-form').addEventListener('submit', function () {
+  ['t-from', 't-to'].forEach(function (id) {
+    var el = document.getElementById(id);
+    var apiVal = toApiFormat(el.value);
+    if (apiVal) {
+      var hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = id === 't-from' ? 'from' : 'to';
+      hidden.value = apiVal;
+      document.getElementById('truck-lookup-form').appendChild(hidden);
+    }
+  });
+});
+</script>
 {% endblock %}
