@@ -73,7 +73,7 @@ def weight_query():
             rows = r.json()
         else:
             flash(f"Error {r.status_code}: {r.text}", "danger")
-    return render_template("weight/query.html", rows=rows, args=request.args)
+    return render_template("weight/query.html", rows=rows, args=request.args, raw=rows)
 
 
 # ── Weight — Batch Upload ──────────────────────────────────────────────────────
