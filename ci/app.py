@@ -63,7 +63,7 @@ def get_recipients(branch):
 
 def cleanup_test_env():
     result = subprocess.run(
-            ['docker', 'compose', '-p', 'gan-shmuel-test', '-f', 'docker-compose.test.yml', 'down', '-v'],
+            ['docker', 'compose', '-p', 'gan-shmuel-test', '-f', 'docker-compose.test.yml', 'down'],
             cwd=REPO_DIR, capture_output=True, text=True
     )
     logging.info(f"Test cleanup: {result.stdout.strip()}")
