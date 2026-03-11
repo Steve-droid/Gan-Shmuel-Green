@@ -44,6 +44,8 @@ services:
       - "8080:5000"
     environment:
       - DB_HOST=weight-db
+      - DB_USER=root
+      - DB_NAME=weight
       - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
     depends_on:
       - weight-db
