@@ -4,7 +4,6 @@ import threading
 import os                                                                                                                                                                                         
 import logging
 import time
-import urllib.request
 import smtplib                                                                
 from email.mime.text import MIMEText
 from auth import authenticate
@@ -118,23 +117,22 @@ def run_pipeline(branch):
         #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 3 (test deploy) failed:\n{result.stderr.strip()}", recipients)
         return
 
-    # Wait for containers to be ready (poll health endpoints, MySQL init can take 60s+ on EC2)
-    health_urls = [
-        'http://host.docker.internal:8082/health',
-        'http://host.docker.internal:8083/health',
-    ]
-    deadline = time.time() + 120
-    while time.time() < deadline:
-        try:
-            results = [urllib.request.urlopen(u, timeout=3).status == 200 for u in health_urls]
-            if all(results):
-                logging.info("Test containers ready")
+    # Wait for MySQL to be ready in both DB containers (init scripts can take 60s+ on EC2)
+    db_root_pass = os.environ.get('MYSQL_ROOT_PASSWORD', 'root')
+    for db_container in ['gan-shmuel-test-weight-db-1', 'gan-shmuel-test-billing-db-1']:
+        deadline = time.time() + 120
+        while time.time() < deadline:
+            result = subprocess.run(
+                ['docker', 'exec', db_container,
+                 'mysqladmin', 'ping', '-h', '127.0.0.1', '-u', 'root', f'-p{db_root_pass}', '--silent'],
+                capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                logging.info(f"{db_container} is ready")
                 break
-        except Exception:
-            pass
-        time.sleep(3)
-    else:
-        logging.warning("Test containers did not become ready within 120s — proceeding anyway")
+            time.sleep(3)
+        else:
+            logging.warning(f"{db_container} did not become ready within 120s — proceeding anyway")
 
     # Copy sample upload files into containers
     # (volume bind path fails when docker-compose runs from inside the CI container)
