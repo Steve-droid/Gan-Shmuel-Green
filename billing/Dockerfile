@@ -9,4 +9,4 @@ COPY . .
 
 EXPOSE 5001
 
-CMD ["python", "run.py"]
+ENTRYPOINT ["python", "run.py"]
