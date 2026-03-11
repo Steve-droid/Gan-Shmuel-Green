@@ -59,7 +59,7 @@ def test_put_provider(state):
 def test_post_truck(state):
     payload = {
         "id": state["truck_id"],
-        "provider_id": state["provider_id"]
+        "provider": state["provider_id"]
     }
     response = requests.post(f"{BILLING_URL}/truck", json=payload)
     assert response.status_code == 201
