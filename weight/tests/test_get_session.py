@@ -91,7 +91,7 @@ def test_print_not_found_output(mock_get_db, client):
     mock_get_db.return_value = mock_conn
     mock_conn.cursor.return_value = mock_cursor
     
-    mock_cursor.fetchone.return_value = None
+    mock_cursor.fetchall.return_value = []
 
     response = client.get('/session/999')
     data = response.get_json()
