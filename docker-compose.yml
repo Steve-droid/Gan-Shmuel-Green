@@ -46,6 +46,7 @@ services:
       - DB_HOST=weight-db
       - DB_USER=root
       - DB_NAME=weight
+      - DB_PORT=3306
       - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
     depends_on:
       - weight-db
