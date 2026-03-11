@@ -19,18 +19,28 @@ def test_print_success_output(mock_get_db, client):
     mock_conn.cursor.return_value = mock_cursor
 
     # Simulating: Bruto(8000) - Tara(4000) - Container(520) = 3480
-    mock_cursor.fetchone.side_effect = [
-        {
-            "id": 10004,
-            "truck": "XYZ-789",
-            "bruto": 8000,
-            "direction": "out",
-            "datetime": datetime(2026, 2, 22, 13, 45, 43),
-            "truckTara": 4000,
-            "containers": "C003"
-        },
-        {"weight": 520} # Weight for C003
-    ]
+    mock_cursor.fetchall.return_value = [
+    {
+        "sessionId": 10004,
+        "truck": "XYZ-789",
+        "bruto": 8000,
+        "direction": "in",
+        "datetime": datetime(2026, 2, 22, 13, 45, 43),
+        "produce": "apples",
+        "containers": ""
+    },
+    {
+        "sessionId": 10004,
+        "truck": "XYZ-789",
+        "bruto": 8000,
+        "direction": "out",
+        "datetime": datetime(2026, 2, 22, 14, 0, 0),
+        "truckTara": 4000,
+        "neto": 3480,
+        "produce": "na",
+        "containers": ""
+    }
+]
 
     response = client.get('/session/10004')
     data = response.get_json()
@@ -50,15 +60,19 @@ def test_print_missing_tara_output(mock_get_db, client):
     mock_get_db.return_value = mock_conn
     mock_conn.cursor.return_value = mock_cursor
 
-    mock_cursor.fetchone.return_value = {
-        "id": 10005,
+    mock_cursor.fetchall.return_value = [
+    {
+        "sessionId": 10005,
         "truck": "ABC-123",
         "bruto": 12000,
         "direction": "out",
         "datetime": datetime(2026, 2, 25, 10, 0, 0),
-        "truckTara": 0, # Triggering the "na" logic
+        "truckTara": 0,
+        "neto": None,
+        "produce": "na",
         "containers": "C001"
     }
+]
 
     response = client.get('/session/10005')
     data = response.get_json()
@@ -77,7 +91,7 @@ def test_print_not_found_output(mock_get_db, client):
     mock_get_db.return_value = mock_conn
     mock_conn.cursor.return_value = mock_cursor
     
-    mock_cursor.fetchone.return_value = None
+    mock_cursor.fetchall.return_value = []
 
     response = client.get('/session/999')
     data = response.get_json()

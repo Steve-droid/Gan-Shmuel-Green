@@ -1,0 +1,46 @@
+services:
+  billing:
+    volumes:
+      - ./resources/sample_files/sample_uploads:/app/in
+    build: ./billing
+    ports:
+      - "8083:5001"
+    environment:
+      - DB_HOST=billing-db
+      - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - WEIGHT_SERVICE_URL=http://weight:5000
+    depends_on:
+      - billing-db
+    restart: unless-stopped
+
+  billing-db:
+    image: mysql:8.4
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ./resources/db_schemas/multi-db/billingdb.sql:/docker-entrypoint-initdb.d/billingdb.sql
+    restart: unless-stopped
+
+  weight:
+    volumes:
+      - ./resources/sample_files/sample_uploads:/app/in 
+    build: ./weight
+    ports:
+      - "8082:5000"
+    environment:
+      - DB_HOST=weight-db
+      - DB_USER=root
+      - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - DB_NAME=weight
+      - DB_PORT=3306
+    depends_on:
+      - weight-db
+    restart: unless-stopped
+
+  weight-db:
+    image: mysql:8.4
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ./resources/db_schemas/multi-db/weightdb.sql:/docker-entrypoint-initdb.d/weightdb.sql
+    restart: unless-stopped
