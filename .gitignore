@@ -3,7 +3,6 @@
 *.env
 .env.test
 
-
 # Python artifacts
 __pycache__/
 *.pyc
