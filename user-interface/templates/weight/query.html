@@ -15,13 +15,14 @@
       {% set to_disp   = tv[6:8]+'/'+tv[4:6]+'/'+tv[:4]+' '+tv[8:10]+':'+tv[10:12]+':'+tv[12:14] if tv|length == 14 else '' %}
       <div class="col-md-3">
         <label class="form-label fw-semibold">From</label>
-        <input type="text" class="form-control font-monospace" id="q-from"
-               placeholder="DD/MM/YYYY HH:MM:SS" autocomplete="off" value="{{ from_disp }}">
+        <input type="datetime-local" class="form-control font-monospace" id="q-from" name="w_from"
+               placeholder="{DATE_FROM_PLACEHOLDER}" autocomplete="off" value="2026-03-11T12:00">
       </div>
       <div class="col-md-3">
         <label class="form-label fw-semibold">To</label>
-        <input type="text" class="form-control font-monospace" id="q-to"
-               placeholder="DD/MM/YYYY HH:MM:SS" autocomplete="off" value="{{ to_disp }}">
+        <input type="datetime-local" class="form-control font-monospace" id="q-to" name="w_to"
+               placeholder="{DATE_TO_PLACEHOLDER}" autocomplete="off" value="2026-03-12T00:00">
+               
       </div>
       <div class="col-md-4">
         <label class="form-label fw-semibold">Direction Filter</label>
@@ -61,6 +62,7 @@
           <th>Neto (kg)</th>
           <th>Produce</th>
           <th>Containers</th>
+          <th>Datetime</th>
         </tr>
       </thead>
       <tbody>
@@ -84,10 +86,14 @@
           <td>{{ row.neto }}</td>
           <td>{{ row.produce or "—" }}</td>
           <td class="font-monospace small text-muted">{{ row.containers or "—" }}</td>
+          <td>{{ row.datetime }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    <!-- removed for brevity -->
+    <!-- <pre>{{ raw|tojson(indent=2) }}</pre> -->
+    <!-- removed for brevity -->
   </div>
   {% else %}
     <div class="text-center text-muted py-5">
