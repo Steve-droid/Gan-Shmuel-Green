@@ -220,7 +220,7 @@ def run_pipeline(branch):
         return
 
     result = subprocess.run(
-        ['docker', 'compose', '-p', 'gan-shmuel', 'up', '-d', '--no-deps', 'billing', 'weight'],
+        ['docker', 'compose', '-p', 'gan-shmuel', 'up', '-d', '--no-deps', 'billing', 'weight', 'ui'],
         cwd=REPO_DIR, capture_output=True, text=True
     )
     logging.info(f"Production deploy: {result.stdout.strip()}")
