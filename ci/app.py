@@ -63,7 +63,7 @@ def get_recipients(branch):
 
 def cleanup_test_env():
     result = subprocess.run(
-            ['docker', 'compose', '-p', 'gan-shmuel-test', '-f', 'docker-compose.test.yml', 'down'],
+            ['docker', 'compose', '-p', 'gan-shmuel-test', '-f', 'docker-compose.test.yml', 'down', '-v'],
             cwd=REPO_DIR, capture_output=True, text=True
     )
     logging.info(f"Test cleanup: {result.stdout.strip()}")
@@ -118,7 +118,15 @@ def run_pipeline(branch):
         return
 
     # Wait for containers to finish booting (MySQL init takes longer on EC2)
-    time.sleep(10)
+    time.sleep(25)
+
+    # Copy sample upload files into containers
+    # (volume bind path fails when docker-compose runs from inside the CI container)
+    for container in ['gan-shmuel-test-billing-1', 'gan-shmuel-test-weight-1']:
+        subprocess.run(
+            ['docker', 'cp', f'{REPO_DIR}/resources/sample_files/sample_uploads/.', f'{container}:/app/in/'],
+            capture_output=True, text=True
+        )
 
     # Step 4: Run tests
     # Step 4a-i: Billing unit tests (run inside the billing test container which has all deps)
