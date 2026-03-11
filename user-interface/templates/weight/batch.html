@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Batch Upload{% endblock %}
+
+{% block content %}
+<h2 class="mb-4 fw-bold">Batch Container Upload</h2>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card border-0 bg-body-secondary">
+      <div class="card-body p-4">
+        <p class="text-muted mb-4">
+          Load a CSV or JSON file of container weights from the service's <code>/in</code> folder.
+          Enter the filename as it appears in that folder.
+        </p>
+        <form method="POST">
+          <div class="mb-4">
+            <label for="filename" class="form-label fw-semibold">Filename</label>
+            <input type="text" class="form-control font-monospace" id="filename" name="filename"
+                   placeholder="containers1.csv" required>
+            <div class="form-text">File must already be present in the weight service <code>/in</code> folder.</div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-cloud-upload me-2"></i>Load File
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card border-0 bg-body-secondary">
+      <div class="card-body p-4">
+        <h6 class="fw-semibold mb-3">Supported Formats</h6>
+        <p class="text-muted small mb-2">CSV with kg:</p>
+        <pre class="bg-body-tertiary rounded p-3 small">"id","kg"
+C-35434,296
+C-73281,273</pre>
+        <p class="text-muted small mb-2">CSV with lbs:</p>
+        <pre class="bg-body-tertiary rounded p-3 small">"id","lbs"
+K-8263,666</pre>
+        <p class="text-muted small mb-2">JSON:</p>
+        <pre class="bg-body-tertiary rounded p-3 small">[
+  {"id":"T-14409","weight":528,"unit":"lbs"}
+]</pre>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

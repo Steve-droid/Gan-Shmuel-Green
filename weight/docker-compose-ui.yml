@@ -1,10 +1,10 @@
 services:
 
-  # MySQL database for the weight service 
+  # MySQL database for the weight service
   weight-db:
     build:
-      context: .                          # project root so COPY can reach resources/
-      dockerfile: weight-db/Dockerfile
+      context: ..                         # project root so COPY can reach resources/
+      dockerfile: weight/weight-db/Dockerfile
     environment:
       MYSQL_ROOT_PASSWORD: rootpass
       MYSQL_DATABASE: weight
@@ -20,7 +20,8 @@ services:
       start_period: 30s
 
   # Weight microservice (Flask API)
-    build: ./weight
+  weight:
+    build: .
     ports:
       - "5001:5000"                       # accessible at localhost:5001 from the host
     environment:
@@ -39,7 +40,8 @@ services:
       - app-net
 
   # User interface (Flask web app)
-    build: ./user-interface
+  ui:
+    build: ../user-interface
     ports:
       - "5000:5000"                       # open the browser at http://localhost:5000
     environment:

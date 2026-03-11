@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Query Weighings{% endblock %}
+
+{% block content %}
+<h2 class="mb-4 fw-bold">Query Weighings</h2>
+
+<!-- Filter form -->
+<div class="card border-0 bg-body-secondary mb-4">
+  <div class="card-body p-4">
+    <form id="query-form" method="GET" class="row g-3 align-items-end">
+      <input type="hidden" name="submitted" value="1">
+      {% set fv = args.get('from', '') %}
+      {% set tv = args.get('to', '') %}
+      {% set from_disp = fv[6:8]+'/'+fv[4:6]+'/'+fv[:4]+' '+fv[8:10]+':'+fv[10:12]+':'+fv[12:14] if fv|length == 14 else '' %}
+      {% set to_disp   = tv[6:8]+'/'+tv[4:6]+'/'+tv[:4]+' '+tv[8:10]+':'+tv[10:12]+':'+tv[12:14] if tv|length == 14 else '' %}
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">From</label>
+        <input type="text" class="form-control font-monospace" id="q-from"
+               placeholder="DD/MM/YYYY HH:MM:SS" autocomplete="off" value="{{ from_disp }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">To</label>
+        <input type="text" class="form-control font-monospace" id="q-to"
+               placeholder="DD/MM/YYYY HH:MM:SS" autocomplete="off" value="{{ to_disp }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">Direction Filter</label>
+        <div class="d-flex gap-3 mt-1">
+          {% for val in ["in", "out", "none"] %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="filter" value="{{ val }}"
+                   id="f_{{ val }}"
+                   {% if val in (args.get('filter', 'in,out,none').split(',')) %}checked{% endif %}>
+            <label class="form-check-label" for="f_{{ val }}">{{ val }}</label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-search me-1"></i>Search
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Results -->
+{% if rows is not none %}
+  {% if rows %}
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <span class="text-muted small">{{ rows|length }} result(s)</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Session ID</th>
+          <th>Direction</th>
+          <th>Bruto (kg)</th>
+          <th>Neto (kg)</th>
+          <th>Produce</th>
+          <th>Containers</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td class="font-monospace">
+            <a href="{{ url_for('lookup') }}?session_id={{ row.sessionId }}" class="text-decoration-none">
+              {{ row.sessionId }}
+            </a>
+          </td>
+          <td>
+            {% if row.direction == "in" %}
+              <span class="badge bg-success">in</span>
+            {% elif row.direction == "out" %}
+              <span class="badge bg-warning text-dark">out</span>
+            {% else %}
+              <span class="badge bg-secondary">none</span>
+            {% endif %}
+          </td>
+          <td>{{ row.bruto }}</td>
+          <td>{{ row.neto }}</td>
+          <td>{{ row.produce or "—" }}</td>
+          <td class="font-monospace small text-muted">{{ row.containers or "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+      No weighings found for the selected filters.
+    </div>
+  {% endif %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Convert "DD/MM/YYYY HH:MM:SS" → "YYYYMMDDHHmmss"
+function displayToApi(val) {
+  val = val.trim();
+  if (!val) return '';
+  var parts = val.split(/\s+/);
+  var d = (parts[0] || '').split('/');
+  var t = (parts[1] || '').replace(/:/g, '').padEnd(6, '0');
+  if (d.length !== 3 || d[2].length !== 4) return '';
+  return d[2] + d[1].padStart(2,'0') + d[0].padStart(2,'0') + t;
+}
+
+document.getElementById('query-form').addEventListener('submit', function (e) {
+  ['q-from', 'q-to'].forEach(function (id) {
+    var el = document.getElementById(id);
+    var apiVal = displayToApi(el.value);
+    if (apiVal) {
+      var hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = id === 'q-from' ? 'from' : 'to';
+      hidden.value = apiVal;
+      document.getElementById('query-form').appendChild(hidden);
+    }
+  });
+});
+</script>
+{% endblock %}

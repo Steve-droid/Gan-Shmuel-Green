@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h2 class="mb-4 fw-bold">Dashboard</h2>
+
+<!-- Service health -->
+<div class="row g-3 mb-5">
+  <div class="col-md-6">
+    <div class="card h-100 border-0 bg-body-secondary">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="fs-1">
+          {% if weight_ok %}
+            <i class="bi bi-check-circle-fill text-success"></i>
+          {% else %}
+            <i class="bi bi-x-circle-fill text-danger"></i>
+          {% endif %}
+        </div>
+        <div>
+          <div class="fw-semibold fs-5">Weight Service</div>
+          <div class="text-muted small">
+            {% if weight_ok %}Online{% else %}{{ weight_err or "Offline" }}{% endif %}
+          </div>
+        </div>
+        <span class="ms-auto badge {% if weight_ok %}bg-success{% else %}bg-danger{% endif %} fs-6">
+          {% if weight_ok %}OK{% else %}DOWN{% endif %}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card h-100 border-0 bg-body-secondary">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="fs-1">
+          {% if billing_ok %}
+            <i class="bi bi-check-circle-fill text-success"></i>
+          {% else %}
+            <i class="bi bi-x-circle-fill text-danger"></i>
+          {% endif %}
+        </div>
+        <div>
+          <div class="fw-semibold fs-5">Billing Service</div>
+          <div class="text-muted small">
+            {% if billing_ok %}Online{% else %}{{ billing_err or "Offline" }}{% endif %}
+          </div>
+        </div>
+        <span class="ms-auto badge {% if billing_ok %}bg-success{% else %}bg-danger{% endif %} fs-6">
+          {% if billing_ok %}OK{% else %}DOWN{% endif %}
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick actions -->
+<h5 class="mb-3 text-muted text-uppercase small fw-semibold">Quick Actions</h5>
+<div class="row g-3">
+  <div class="col-sm-6 col-lg-3">
+    <a href="{{ url_for('weight_record') }}" class="card card-hover text-decoration-none h-100">
+      <div class="card-body text-center py-4">
+        <i class="bi bi-plus-circle fs-2 text-primary mb-2 d-block"></i>
+        <div class="fw-semibold">Record Weighing</div>
+        <div class="text-muted small">Log a truck weighing event</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <a href="{{ url_for('weight_query') }}" class="card card-hover text-decoration-none h-100">
+      <div class="card-body text-center py-4">
+        <i class="bi bi-search fs-2 text-info mb-2 d-block"></i>
+        <div class="fw-semibold">Query Weighings</div>
+        <div class="text-muted small">Filter by date and direction</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <a href="{{ url_for('billing_bill') }}" class="card card-hover text-decoration-none h-100">
+      <div class="card-body text-center py-4">
+        <i class="bi bi-receipt fs-2 text-warning mb-2 d-block"></i>
+        <div class="fw-semibold">Generate Invoice</div>
+        <div class="text-muted small">View supplier billing summary</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <a href="{{ url_for('lookup') }}" class="card card-hover text-decoration-none h-100">
+      <div class="card-body text-center py-4">
+        <i class="bi bi-card-list fs-2 text-success mb-2 d-block"></i>
+        <div class="fw-semibold">Item Lookup</div>
+        <div class="text-muted small">Find truck, container, or session</div>
+      </div>
+    </a>
+  </div>
+</div>
+{% endblock %}
