@@ -13,7 +13,7 @@ def test_full_weighing_and_billing_flow():
     provider_id = r.json()["id"]
 
     # Register truck under provider
-    r = requests.post(f"{BILLING_URL}/truck", json={"id": TRUCK_ID, "provider": provider_id})
+    r = requests.post(f"{BILLING_URL}/truck", json={"id": TRUCK_ID, "provider_id": provider_id})
     assert r.status_code == 201
 
     # Upload rates — file= is a query parameter, not a body field
