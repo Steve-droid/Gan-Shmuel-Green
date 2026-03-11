@@ -29,7 +29,7 @@ REPO_DIR = os.environ.get('REPO_DIR', '/repo')
 EMAIL_FROM = os.environ.get('GMAIL_USER')
 EMAIL_TO = os.environ.get('NOTIFY_ALL', EMAIL_FROM)
 EMAIL_PASSWORD = os.environ.get('GMAIL_PASSWORD')
-ALLOWED_BRANCHES = {'main', 'billing', 'weight'}
+ALLOWED_BRANCHES = {'main', 'billing', 'weight', 'devops'}
 
 def send_email(subject, body, recipients):
     if not EMAIL_FROM or not EMAIL_PASSWORD or not recipients:
