@@ -26,6 +26,8 @@ services:
       - DB_HOST=billing-db
       - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - WEIGHT_SERVICE_URL=http://weight:5000
+    volumes:
+      - ./resources/sample_files/sample_uploads:/app/in
     depends_on:
       - billing-db
     restart: unless-stopped
@@ -48,6 +50,8 @@ services:
       - DB_NAME=weight
       - DB_PORT=3306
       - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ./resources/sample_files/sample_uploads:/app/in
     depends_on:
       - weight-db
     restart: unless-stopped
