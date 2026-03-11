@@ -30,6 +30,7 @@ def test_file_not_found_returns_404(client):
 # ─── CSV (kg) ─────────────────────────────────────────────────────────────────
 
 @patch("app.upsert_containers")
+@patch("app.recalculate_pending_netos", return_value=0)
 def test_csv_kg_parses_and_upserts(mock_upsert, client, tmp_path):
     f = tmp_path / "containers.csv"
     f.write_text("id,kg\nC-001,200\nC-002,150\n")
@@ -49,6 +50,7 @@ def test_csv_kg_parses_and_upserts(mock_upsert, client, tmp_path):
 # ─── CSV (lbs) ────────────────────────────────────────────────────────────────
 
 @patch("app.upsert_containers")
+@patch("app.recalculate_pending_netos", return_value=0)
 def test_csv_lbs_parses_and_upserts(mock_upsert, client, tmp_path):
     f = tmp_path / "containers.csv"
     f.write_text("id,lbs\nC-003,440\nC-004,880\n")
@@ -65,6 +67,7 @@ def test_csv_lbs_parses_and_upserts(mock_upsert, client, tmp_path):
 # ─── JSON ─────────────────────────────────────────────────────────────────────
 
 @patch("app.upsert_containers")
+@patch("app.recalculate_pending_netos", return_value=0)
 def test_json_parses_and_upserts(mock_upsert, client, tmp_path):
     f = tmp_path / "containers.json"
     f.write_text(json.dumps([
@@ -128,6 +131,7 @@ def test_json_invalid_unit_returns_400(client, tmp_path):
 # ─── Empty file ───────────────────────────────────────────────────────────────
 
 @patch("app.upsert_containers")
+@patch("app.recalculate_pending_netos", return_value=0)
 def test_empty_csv_loads_zero_containers(mock_upsert, client, tmp_path):
     f = tmp_path / "empty.csv"
     f.write_text("id,kg\n")  # header only, no rows

@@ -21,7 +21,7 @@ def test_get_weights_success(mock_get_db, client):
     # Define dummy data that looks like your DB rows
     mock_cursor.fetchall.return_value = [
         {
-            "id": 1001,
+            "sessionId": 1001,
             "direction": "in",
             "bruto": 5000,
             "neto": 2000,
@@ -35,7 +35,7 @@ def test_get_weights_success(mock_get_db, client):
     data = response.get_json()
     assert response.status_code == 200
     assert len(data) == 1
-    assert data[0]["id"] == 1001
+    assert data[0]["sessionId"] == 1001
     assert data[0]["containers"] == ["C1", "C2"]  # Check it split correctly
 
 # 2. Test Edge Case: No Results Found
