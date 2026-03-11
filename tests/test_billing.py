@@ -73,14 +73,8 @@ def test_get_truck_details(state):
 # --- Rates Tests ---
 
 def test_post_rates(state):
-    # Testing rate for a specific provider
-    payload = {
-        "product_id": state["product_id"],
-        "rate": 150,
-        "scope": str(state["provider_id"])
-    }
-    response = requests.post(f"{BILLING_URL}/rates", json=payload)
-    assert response.status_code == 201
+    response = requests.post(f"{BILLING_URL}/rates", params={"file": "rates.xlsx"})
+    assert response.status_code == 200
 
 def test_get_rates():
     response = requests.get(f"{BILLING_URL}/rates")
