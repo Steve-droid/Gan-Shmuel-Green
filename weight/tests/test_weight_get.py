@@ -26,7 +26,8 @@ def test_get_weights_success(mock_get_db, client):
             "bruto": 5000,
             "neto": 2000,
             "produce": "orange",
-            "containers": "C1,C2"
+            "containers": "C1,C2",
+            "datetime": "2024-01-01 10:00:00"
         }
     ]
 
