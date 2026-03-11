@@ -17,13 +17,12 @@
         <label class="form-label fw-semibold">From</label>
         <input type="text" class="form-control font-monospace" name="from"
                placeholder="yyyymmddhhmmss" value="{{ args.get('from', '') }}">
-        <div class="form-text">Defaults to 1st of current month</div>
       </div>
       <div class="col-md-3">
         <label class="form-label fw-semibold">To</label>
         <input type="text" class="form-control font-monospace" name="to"
                placeholder="yyyymmddhhmmss" value="{{ args.get('to', '') }}">
-        <div class="form-text">Defaults to now</div>
+        
       </div>
       <div class="col-md-3">
         <button type="submit" class="btn btn-warning w-100 text-dark">
