@@ -134,8 +134,24 @@ def run_pipeline(branch):
         else:
             logging.warning(f"{db_container} did not become ready within 120s — proceeding anyway")
 
+    # Initialize databases via docker cp + mysql exec
+    # Bind mount paths fail when docker-compose runs from inside the CI container,
+    # so init SQL scripts don't execute. We apply them manually here instead.
+    for db_container, sql_file in [
+        ('gan-shmuel-test-weight-db-1',  f'{REPO_DIR}/resources/db_schemas/multi-db/weightdb.sql'),
+        ('gan-shmuel-test-billing-db-1', f'{REPO_DIR}/resources/db_schemas/multi-db/billingdb.sql'),
+    ]:
+        subprocess.run(['docker', 'cp', sql_file, f'{db_container}:/tmp/init.sql'],
+                       capture_output=True, text=True)
+        result = subprocess.run(
+            ['docker', 'exec', db_container,
+             'sh', '-c', f'mysql -u root -p{db_root_pass} < /tmp/init.sql'],
+            capture_output=True, text=True
+        )
+        logging.info(f"DB init {db_container}: returncode={result.returncode} {result.stderr.strip()}")
+
     # Copy sample upload files into containers
-    # (volume bind path fails when docker-compose runs from inside the CI container)
+    # (same bind mount issue — copy manually via docker cp)
     for container in ['gan-shmuel-test-billing-1', 'gan-shmuel-test-weight-1']:
         subprocess.run(
             ['docker', 'cp', f'{REPO_DIR}/resources/sample_files/sample_uploads/.', f'{container}:/app/in/'],
