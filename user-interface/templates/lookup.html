@@ -12,9 +12,7 @@
         <h6 class="fw-semibold mb-3"><i class="bi bi-truck me-2 text-primary"></i>Truck or Container</h6>
         {% set fv = args.get('from', '') %}
         {% set tv = args.get('to', '') %}
-        {% set from_dt = fv[:4]+'-'+fv[4:6]+'-'+fv[6:8]+'T'+fv[8:10]+':'+fv[10:12]+':'+fv[12:14] if fv|length == 14 else '' %}
-        {% set to_dt   = tv[:4]+'-'+tv[4:6]+'-'+tv[6:8]+'T'+tv[8:10]+':'+tv[10:12]+':'+tv[12:14] if tv|length == 14 else '' %}
-        <form id="item-form" method="GET" class="row g-2">
+        <form method="GET" class="row g-2">
           {% if args.get('session_id') %}
           <input type="hidden" name="session_id" value="{{ args.get('session_id') }}">
           {% endif %}
@@ -24,12 +22,12 @@
                    value="{{ args.get('item_id', '') }}">
           </div>
           <div class="col-6">
-            <input type="datetime-local" class="form-control" name="from" id="l-from"
-                   step="1" value="{{ from_dt }}">
+            <input type="text" class="form-control font-monospace" name="from"
+                   placeholder="yyyymmddhhmmss" value="{{ fv }}">
           </div>
           <div class="col-6">
-            <input type="datetime-local" class="form-control" name="to" id="l-to"
-                   step="1" value="{{ to_dt }}">
+            <input type="text" class="form-control font-monospace" name="to"
+                   placeholder="yyyymmddhhmmss" value="{{ tv }}">
           </div>
           <div class="col-12">
             <button type="submit" class="btn btn-primary w-100">
@@ -137,18 +135,4 @@
   </div>
 </div>
 {% endif %}
-{% endblock %}
-
-{% block scripts %}
-<script>
-function toApiFormat(val) {
-  return val ? val.replace(/[-T:]/g, '').padEnd(14, '0') : '';
-}
-document.getElementById('item-form').addEventListener('submit', function () {
-  ['l-from', 'l-to'].forEach(function (id) {
-    var el = document.getElementById(id);
-    el.value = toApiFormat(el.value);
-  });
-});
-</script>
 {% endblock %}

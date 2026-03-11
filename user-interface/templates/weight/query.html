@@ -11,18 +11,15 @@
       <input type="hidden" name="submitted" value="1">
       {% set fv = args.get('from', '') %}
       {% set tv = args.get('to', '') %}
-      {% set from_disp = fv[6:8]+'/'+fv[4:6]+'/'+fv[:4]+' '+fv[8:10]+':'+fv[10:12]+':'+fv[12:14] if fv|length == 14 else '' %}
-      {% set to_disp   = tv[6:8]+'/'+tv[4:6]+'/'+tv[:4]+' '+tv[8:10]+':'+tv[10:12]+':'+tv[12:14] if tv|length == 14 else '' %}
       <div class="col-md-3">
         <label class="form-label fw-semibold">From</label>
-        <input type="datetime-local" class="form-control font-monospace" id="q-from" name="w_from"
-               placeholder="{DATE_FROM_PLACEHOLDER}" autocomplete="off" value="2026-03-11T12:00">
+        <input type="text" class="form-control font-monospace" name="from"
+               placeholder="yyyymmddhhmmss" autocomplete="off" value="{{ fv }}">
       </div>
       <div class="col-md-3">
         <label class="form-label fw-semibold">To</label>
-        <input type="datetime-local" class="form-control font-monospace" id="q-to" name="w_to"
-               placeholder="{DATE_TO_PLACEHOLDER}" autocomplete="off" value="2026-03-12T00:00">
-               
+        <input type="text" class="form-control font-monospace" name="to"
+               placeholder="yyyymmddhhmmss" autocomplete="off" value="{{ tv }}">
       </div>
       <div class="col-md-4">
         <label class="form-label fw-semibold">Direction Filter</label>
@@ -102,33 +99,4 @@
     </div>
   {% endif %}
 {% endif %}
-{% endblock %}
-
-{% block scripts %}
-<script>
-// Convert "DD/MM/YYYY HH:MM:SS" → "YYYYMMDDHHmmss"
-function displayToApi(val) {
-  val = val.trim();
-  if (!val) return '';
-  var parts = val.split(/\s+/);
-  var d = (parts[0] || '').split('/');
-  var t = (parts[1] || '').replace(/:/g, '').padEnd(6, '0');
-  if (d.length !== 3 || d[2].length !== 4) return '';
-  return d[2] + d[1].padStart(2,'0') + d[0].padStart(2,'0') + t;
-}
-
-document.getElementById('query-form').addEventListener('submit', function (e) {
-  ['q-from', 'q-to'].forEach(function (id) {
-    var el = document.getElementById(id);
-    var apiVal = displayToApi(el.value);
-    if (apiVal) {
-      var hidden = document.createElement('input');
-      hidden.type = 'hidden';
-      hidden.name = id === 'q-from' ? 'from' : 'to';
-      hidden.value = apiVal;
-      document.getElementById('query-form').appendChild(hidden);
-    }
-  });
-});
-</script>
 {% endblock %}
