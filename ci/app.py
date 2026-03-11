@@ -131,7 +131,7 @@ def run_pipeline(branch):
     logging.info(f"Billing tests: {result.stdout.strip()}")
 
     if result.returncode != 0:
-        logging.error(f"Billing tests failed: {result.stdout.strip()}")
+        logging.error(f"Billing tests failed:\nSTDOUT: {result.stdout.strip()}\nSTDERR: {result.stderr.strip()}")
         #send_email(f"[FAIL] Pipeline failed on {branch}", f"Billing tests failed:\n{result.stdout.strip()}", recipients)
         cleanup_test_env()
         return
@@ -147,7 +147,7 @@ def run_pipeline(branch):
     logging.info(f"Weight tests: {result.stdout.strip()}")
 
     if result.returncode != 0:
-        logging.error(f"Weight tests failed: {result.stdout.strip()}")
+        logging.error(f"Weight tests failed:\nSTDOUT: {result.stdout.strip()}\nSTDERR: {result.stderr.strip()}")
         #send_email(f"[FAIL] Pipeline failed on {branch}", f"Weight tests failed:\n{result.stdout.strip()}", recipients)
         cleanup_test_env()
         return
@@ -160,7 +160,7 @@ def run_pipeline(branch):
 
     logging.info(f"Integration tests: {result.stdout.strip()}")
     if result.returncode != 0:
-        logging.error(f"Integration tests failed: {result.stdout.strip()}")
+        logging.error(f"Integration tests failed:\nSTDOUT: {result.stdout.strip()}\nSTDERR: {result.stderr.strip()}")
         #send_email(f"[FAIL] Pipeline failed on {branch}", f"Integration tests failed:\n{result.stdout.strip()}", recipients)
         cleanup_test_env()
         return    

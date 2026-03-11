@@ -18,12 +18,17 @@ RUN git config --global pull.ff only
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY ci/requirements.txt .
+COPY billing/requirements.txt billing-requirements.txt
+COPY weight/requirements.txt weight-requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    -r billing-requirements.txt \
+    -r weight-requirements.txt && \
+    rm billing-requirements.txt weight-requirements.txt
 
-COPY app.py .
-COPY auth.py .
-COPY templates/ templates/
+COPY ci/app.py .
+COPY ci/auth.py .
+COPY ci/templates/ templates/
 
 EXPOSE 8085
 
