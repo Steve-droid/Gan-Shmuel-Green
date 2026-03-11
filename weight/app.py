@@ -234,7 +234,7 @@ def post_weight():
         )
         tx_id = insert_transaction(new_tx)
         return jsonify({
-            'id': tx_id,
+            'sessionId': tx_id,
             'truck': truck,
             'bruto': bruto_kg
         }), 201
