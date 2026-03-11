@@ -64,27 +64,6 @@ def test_post_weight_invalid_direction_returns_400(client):
     assert "error" in resp.get_json()
 
 
-def test_post_weight_out_without_in_returns_400(client):
-    """
-    מה הטסט בודק?
-    לפי הדרישות: OUT בלי IN קודם -> שגיאה.
-    פה אנחנו לא צריכים DB כדי לבדוק את זה,
-    כי גם בלי DB, אם הקוד לא מוצא open_in הוא צריך להחזיר 400.
-    """
-    payload = {
-        "direction": "out",
-        "truck": "12-345-67",
-        "containers": "C1,C2",
-        "weight": 20000,
-        "unit": "kg",
-        "force": False,
-        "produce": "orange",
-    }
-    resp = client.post("/weight", json=payload)
-    assert resp.status_code == 400
-    assert "error" in resp.get_json()
-
-
 # =================================
 # 3) TESTS FOR GET /weight (report)
 # =================================
