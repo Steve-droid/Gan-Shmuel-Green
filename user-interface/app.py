@@ -4,6 +4,8 @@ from flask import Flask, render_template, request, redirect, url_for, flash, sen
 from dotenv import load_dotenv
 import io
 
+DATE_FROM_PLACEHOLDER = "11/03/2026 14:30:00"
+DATE_TO_PLACEHOLDER = "12/03/2026 15:30:00"
 load_dotenv()
 
 app = Flask(__name__)
@@ -61,6 +63,14 @@ def weight_record():
 def weight_query():
     rows = None
     params = {k: v for k, v in request.args.items() if v}
+    from_dt=request.args.get("w_from", "na")
+    to_dt=request.args.get("w_to", "na")
+    # Convert datetime-local format to YYYYMMDDHHMMSS if present
+    if from_dt and from_dt != "na":
+        params["from"] = from_dt.replace("-", "").replace("T", "").replace(":", "")
+    if to_dt and to_dt != "na":
+        params["to"] = to_dt.replace("-", "").replace("T", "").replace(":", "")
+    
     # Checkboxes send filter=in&filter=out as separate keys; merge into one CSV string
     filter_vals = request.args.getlist('filter')
     if filter_vals:
@@ -73,7 +83,7 @@ def weight_query():
             rows = r.json()
         else:
             flash(f"Error {r.status_code}: {r.text}", "danger")
-    return render_template("weight/query.html", rows=rows, args=request.args, raw=rows)
+    return render_template("weight/query.html", rows=rows, raw=params,args=request.args)
 
 
 # ── Weight — Batch Upload ──────────────────────────────────────────────────────
