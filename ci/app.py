@@ -92,7 +92,7 @@ def run_pipeline(branch):
         logging.info(f"{' '.join(cmd)}: {result.stdout.strip()}")
         if result.returncode != 0:
             logging.error(f"Failed: {result.stderr.strip()}")
-            #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 1 (git) failed:\n{result.stderr.strip()}", recipients)
+            send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 1 (git) failed:\n{result.stderr.strip()}", recipients)
             return
 
     # Step 2: Build images
@@ -103,7 +103,7 @@ def run_pipeline(branch):
     logging.info(f"docker compose build: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Build failed: {result.stderr.strip()}")
-        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 2 (build) failed:\n{result.stderr.strip()}", recipients)
+        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 2 (build) failed:\n{result.stderr.strip()}", recipients)
         return
 
     # Step 3: Deploy to test environment
@@ -114,7 +114,7 @@ def run_pipeline(branch):
     logging.info(f"Test deploy: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Test deploy failed: {result.stderr.strip()}")
-        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 3 (test deploy) failed:\n{result.stderr.strip()}", recipients)
+        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 3 (test deploy) failed:\n{result.stderr.strip()}", recipients)
         return
 
     # Wait for MySQL to be ready in both DB containers (init scripts can take 60s+ on EC2)
@@ -177,7 +177,7 @@ def run_pipeline(branch):
 
     if result.returncode != 0:
         logging.error(f"Billing tests failed:\nSTDOUT: {result.stdout.strip()}\nSTDERR: {result.stderr.strip()}")
-        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Billing tests failed:\n{result.stdout.strip()}", recipients)
+        send_email(f"[FAIL] Pipeline failed on {branch}", f"Billing tests failed:\n{result.stdout.strip()}", recipients)
         cleanup_test_env()
         return
 
@@ -194,7 +194,7 @@ def run_pipeline(branch):
 
     if result.returncode != 0:
         logging.error(f"Weight tests failed:\nSTDOUT: {result.stdout.strip()}\nSTDERR: {result.stderr.strip()}")
-        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Weight tests failed:\n{result.stdout.strip()}", recipients)
+        send_email(f"[FAIL] Pipeline failed on {branch}", f"Weight tests failed:\n{result.stdout.strip()}", recipients)
         cleanup_test_env()
         return
     
@@ -207,7 +207,7 @@ def run_pipeline(branch):
     logging.info(f"Integration tests: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Integration tests failed:\nSTDOUT: {result.stdout.strip()}\nSTDERR: {result.stderr.strip()}")
-        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Integration tests failed:\n{result.stdout.strip()}", recipients)
+        send_email(f"[FAIL] Pipeline failed on {branch}", f"Integration tests failed:\n{result.stdout.strip()}", recipients)
         cleanup_test_env()
         return    
 
@@ -226,7 +226,7 @@ def run_pipeline(branch):
     logging.info(f"Production deploy: {result.stdout.strip()}")
     if result.returncode != 0:
         logging.error(f"Production deploy failed: {result.stderr.strip()}")
-        #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 5 (prod deploy) failed:\n{result.stderr.strip()}", recipients)
+        send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 5 (prod deploy) failed:\n{result.stderr.strip()}", recipients)
         return
 
     logging.info("Pipeline finished successfully")
