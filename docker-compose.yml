@@ -1,6 +1,8 @@
 services:
   ci:
-    build: ./ci
+    build:
+      context: .
+      dockerfile: ci/Dockerfile
     ports:
       - "8085:8085"
     volumes:
@@ -8,6 +10,8 @@ services:
       - .:/repo
     environment:
       - REPO_DIR=/repo
+      - BILLING_URL=http://host.docker.internal:8083
+      - WEIGHT_SERVICE_URL=http://host.docker.internal:8082
     env_file:
       - .env
     extra_hosts:

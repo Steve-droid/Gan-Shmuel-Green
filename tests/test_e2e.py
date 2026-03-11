@@ -1,4 +1,5 @@
 import requests
+import time
 
 WEIGHT_URL = "http://host.docker.internal:8082"
 BILLING_URL = "http://host.docker.internal:8083"
@@ -23,7 +24,7 @@ def test_full_weighing_and_billing_flow():
     # Truck arrives
     r = requests.post(f"{WEIGHT_URL}/weight", json={
         "direction": "in", "truck": TRUCK_ID, "weight": 10000,
-        "unit": "kg", "force": False, "produce": "orange", "containers": ""
+        "unit": "kg", "force": False, "produce": "Navel", "containers": ""
     })
     assert r.status_code == 201
 
@@ -34,6 +35,9 @@ def test_full_weighing_and_billing_flow():
     })
     assert r.status_code == 201
     assert r.json()["neto"] == 7000
+
+    # Wait 1s so billing's GET /item call to weight doesn't race with the session writes
+    time.sleep(1)
 
     # Get invoice
     r = requests.get(f"{BILLING_URL}/bill/{provider_id}")
