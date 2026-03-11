@@ -18,6 +18,7 @@ from db import (
     get_in_transaction_for_session,
     get_containers_tara,
     upsert_containers,
+    recalculate_pending_netos,
     get_item_type,
     get_container_tara_kg,
     get_truck_last_tara_kg,
@@ -452,7 +453,11 @@ def post_batch_weight():
         return jsonify({"error": f"Failed to parse file: {e}"}), 400
 
     upsert_containers(rows)
-    return jsonify({"message": f"Loaded {len(rows)} containers"}), 201
+    resolved = recalculate_pending_netos()
+    msg = f"Loaded {len(rows)} containers"
+    if resolved:
+        msg += f", resolved neto for {resolved} session(s)"
+    return jsonify({"message": msg}), 201
 
 
 @app.get('/unknown')
@@ -472,7 +477,7 @@ def get_unknown():
         
         # 2. Fetch all 'known' container IDs from registration
         # In your DB, the table name is 'containers_registered'
-        cursor.execute("SELECT id FROM containers_registered")
+        cursor.execute("SELECT container_id FROM containers_registered")
         registered_rows = cursor.fetchall()
 
         # 3. Create a set of Known IDs (the 'Registry')
