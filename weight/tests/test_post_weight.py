@@ -116,6 +116,7 @@ def test_out_after_out_without_force_returns_400(mock_last_tx, mock_open_in, cli
 @patch("app.insert_transaction", return_value=1001)
 @patch("app.get_last_open_in_for_truck", return_value=None)
 @patch("app.get_last_transaction_for_truck", return_value=None)
+@patch("app.update_transaction") 
 def test_normal_in(mock_last_tx, mock_open_in, mock_insert, client):
     resp = client.post("/weight", json={
         "direction": "in", "truck": "T1",
@@ -124,7 +125,7 @@ def test_normal_in(mock_last_tx, mock_open_in, mock_insert, client):
     })
     assert resp.status_code == 201
     body = resp.get_json()
-    assert body["id"] == 1001
+    assert body["sessionId"] == 1001
     assert body["truck"] == "T1"
     assert body["bruto"] == 10000
     assert "truckTara" not in body
@@ -152,7 +153,7 @@ def test_normal_out(mock_last_tx, mock_open_in, mock_insert, mock_tara, client):
     })
     assert resp.status_code == 201
     body = resp.get_json()
-    assert body["id"] == 1001           # session id of the matching "in"
+    assert body["sessionId"] == 1001           # session id of the matching "in"
     assert body["truckTara"] == 3000    # "out" weight = truck tara
     assert body["neto"] == 10000 - 3000 - 200  # 6800
 
@@ -189,7 +190,7 @@ def test_none_direction(mock_last_tx, mock_open_in, mock_insert, client):
     })
     assert resp.status_code == 201
     body = resp.get_json()
-    assert body["id"] == 3001
+    assert body["sessionId"] == 3001
     assert body["bruto"] == 500
 
 
@@ -201,6 +202,7 @@ def test_none_direction(mock_last_tx, mock_open_in, mock_insert, client):
 def test_force_in_updates_existing_row(mock_last_tx, mock_open_in, mock_update, client):
     existing_in = MagicMock()
     existing_in.id = 1001
+    existing_in.session_id = 1001
     existing_in.direction = "in"
     mock_open_in.return_value = existing_in
     mock_last_tx.return_value = existing_in
@@ -211,7 +213,7 @@ def test_force_in_updates_existing_row(mock_last_tx, mock_open_in, mock_update, 
         "containers": "C1", "produce": "orange", "force": True
     })
     assert resp.status_code == 201
-    assert resp.get_json()["id"] == 1001   # same row, not a new one
+    assert resp.get_json()["sessionId"] == 1001   # same row, not a new one
     mock_update.assert_called_once()       # UPDATE was called, not INSERT
 
 
