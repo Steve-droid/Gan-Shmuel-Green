@@ -4,6 +4,7 @@ import threading
 import os                                                                                                                                                                                         
 import logging
 import time
+import urllib.request
 import smtplib                                                                
 from email.mime.text import MIMEText
 from auth import authenticate
@@ -117,8 +118,23 @@ def run_pipeline(branch):
         #send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 3 (test deploy) failed:\n{result.stderr.strip()}", recipients)
         return
 
-    # Wait for containers to finish booting (MySQL init takes longer on EC2)
-    time.sleep(25)
+    # Wait for containers to be ready (poll health endpoints, MySQL init can take 60s+ on EC2)
+    health_urls = [
+        'http://host.docker.internal:8082/health',
+        'http://host.docker.internal:8083/health',
+    ]
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        try:
+            results = [urllib.request.urlopen(u, timeout=3).status == 200 for u in health_urls]
+            if all(results):
+                logging.info("Test containers ready")
+                break
+        except Exception:
+            pass
+        time.sleep(3)
+    else:
+        logging.warning("Test containers did not become ready within 120s — proceeding anyway")
 
     # Copy sample upload files into containers
     # (volume bind path fails when docker-compose runs from inside the CI container)
