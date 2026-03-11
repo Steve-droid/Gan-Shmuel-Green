@@ -231,7 +231,7 @@ def billing_rates():
         if not filename:
             flash("Please enter the filename.", "warning")
         else:
-            r, err = call("post", BILLING_URL, "/rates", json={"file": filename})
+            r, err = call("post", BILLING_URL, "/rates", params={"file": filename})
             if err:
                 flash(err, "danger")
             elif r.ok:
