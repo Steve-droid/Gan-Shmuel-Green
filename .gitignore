@@ -1,7 +1,15 @@
+# Python
 .venv/
-__pycache__/
-.env
 venv/
+__pycache__/
 *.pyc
+*.pyo
+*.pyd
+.env
+billing/in/
+.env.test
+
+# OS
+.DS_Store
 .uivenv/
 uivenv/

@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  billing-test-db:
+    image: mysql:8.0
+    container_name: billing-test-db
+    environment:
+      MYSQL_ROOT_PASSWORD: testpass
+      MYSQL_DATABASE: billdb
+    volumes:
+      - ./app/db:/docker-entrypoint-initdb.d
+    ports:
+      - "3308:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  billing-test-app:
+    build: .
+    container_name: billing-test-app
+    depends_on:
+      billing-test-db:
+        condition: service_healthy
+    environment:
+      DB_HOST: billing-test-db
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: testpass
+      DB_NAME: billdb
+      WEIGHT_SERVICE_URL: http://weight-app:5000
+    ports:
+      - "5001:5001"
+    networks:
+      - billing-test-net
+
+networks:
+  billing-test-net:
