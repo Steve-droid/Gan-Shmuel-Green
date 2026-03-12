@@ -31,6 +31,22 @@ EMAIL_TO = os.environ.get('NOTIFY_ALL', EMAIL_FROM)
 EMAIL_PASSWORD = os.environ.get('GMAIL_PASSWORD')
 ALLOWED_BRANCHES = {'main', 'billing', 'weight', 'devops'}
 
+
+#a helper function to resolve next tag name, if there are no tags yet, it returns 'v0.1.0'
+def get_next_tag():
+    result = subprocess.run(['git', 'tag'], cwd=REPO_DIR, capture_output=True, text=True)
+    if result.returncode != 0:
+        logging.error(f"Failed to get git tags: {result.stderr.strip()}")
+        return 'v0.1.0'
+    tags = result.stdout.strip().split('\n')
+    
+    if not tags or tags == ['']:
+        return 'v0.1.0'
+    last_tag= tags[-1]
+    major,minor,patch = last_tag[1:].split('.')
+    next_version = (int(major), int(minor), int(patch) + 1)
+    return f"v{next_version[0]}.{next_version[1]}.{next_version[2]}"
+
 def send_email(subject, body, recipients):
     if not EMAIL_FROM or not EMAIL_PASSWORD or not recipients:
         logging.warning("Email not sent: missing credentials or recipients")
@@ -228,7 +244,8 @@ def run_pipeline(branch):
         logging.error(f"Production deploy failed: {result.stderr.strip()}")
         send_email(f"[FAIL] Pipeline failed on {branch}", f"Step 5 (prod deploy) failed:\n{result.stderr.strip()}", recipients)
         return
-
+    next_tag = get_next_tag()
+    subprocess.run(['git', 'tag', next_tag], cwd=REPO_DIR, capture_output=True, text=True)
     logging.info("Pipeline finished successfully")
 
 
@@ -262,6 +279,27 @@ def status():
         ci_logs=ci_logs
     )
 
+@app.route('/rollback', methods=['GET'])
+def rollback():
+    tags= subprocess.run(['git', 'tag'], cwd=REPO_DIR, capture_output=True, text=True).stdout.strip().split('\n')
+    if len(tags) < 2:
+        return jsonify({"error": "No previous tag to roll back to"}), 400
+    current_tag = tags[-1]
+    previous_tag = tags[-2]
+    
+    #delete current tag
+    subprocess.run(['git', 'tag', '-d', current_tag], cwd=REPO_DIR, capture_output=True, text=True)
+    
+    #checkout previous tag
+    subprocess.run(['git', 'checkout', previous_tag], cwd=REPO_DIR, capture_output=True, text=True)
+    # Implementation for rollback functionality
+    result = subprocess.run(
+        ['docker', 'compose', '-p', 'gan-shmuel', 'up', '-d', '--no-deps', 'billing', 'weight', 'ui'],
+        cwd=REPO_DIR, capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        return jsonify({"error": "Failed to deploy previous version"}), 500
+    return jsonify({"message": "Successfully rolled back to previous version"}), 200
 
 @app.route('/health', methods=['GET'])
 def health():
