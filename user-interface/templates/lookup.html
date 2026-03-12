@@ -22,12 +22,14 @@
                    value="{{ args.get('item_id', '') }}">
           </div>
           <div class="col-6">
-            <input type="text" class="form-control font-monospace" name="from"
-                   placeholder="yyyymmddhhmmss" value="{{ fv }}">
+            <label class="form-label fw-semibold">From</label>
+            <input type="datetime-local" class="form-control" id="l-from"
+                   step="1" value="{{ from_dt }}">
           </div>
           <div class="col-6">
-            <input type="text" class="form-control font-monospace" name="to"
-                   placeholder="yyyymmddhhmmss" value="{{ tv }}">
+            <label class="form-label fw-semibold">To</label>
+            <input type="datetime-local" class="form-control" id="l-to"
+                   step="1" value="{{ to_dt }}">
           </div>
           <div class="col-12">
             <button type="submit" class="btn btn-primary w-100">
@@ -135,4 +137,25 @@
   </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toApiFormat(val) {
+  return val ? val.replace(/[-T:]/g, '').padEnd(14, '0') : '';
+}
+document.getElementById('item-form').addEventListener('submit', function () {
+  ['l-from', 'l-to'].forEach(function (id) {
+    var el = document.getElementById(id);
+    var apiVal = toApiFormat(el.value);
+    if (apiVal) {
+      var hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = id === 'l-from' ? 'from' : 'to';
+      hidden.value = apiVal;
+      document.getElementById('item-form').appendChild(hidden);
+    }
+  });
+});
+</script>
 {% endblock %}
