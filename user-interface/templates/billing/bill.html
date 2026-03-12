@@ -11,7 +11,7 @@
     {% set tv = args.get('to', '') %}
     {% set from_dt = fv[:4]+'-'+fv[4:6]+'-'+fv[6:8]+'T'+fv[8:10]+':'+fv[10:12]+':'+fv[12:14] if fv|length == 14 else '' %}
     {% set to_dt   = tv[:4]+'-'+tv[4:6]+'-'+tv[6:8]+'T'+tv[8:10]+':'+tv[10:12]+':'+tv[12:14] if tv|length == 14 else '' %}
-    <form id="bill-form" method="GET" class="row g-3 align-items-end">
+    <form id="bill-form" method="GET" class="row g-3 align-items-start">
       <div class="col-md-3">
         <label class="form-label fw-semibold">Provider ID <span class="text-danger">*</span></label>
         <input type="text" class="form-control font-monospace" name="provider_id"
@@ -30,6 +30,7 @@
         <div class="form-text">Defaults to now</div>
       </div>
       <div class="col-md-3">
+        <label class="form-label d-block invisible">.</label>
         <button type="submit" class="btn btn-warning w-100 text-dark">
           <i class="bi bi-receipt me-2"></i>Generate Invoice
         </button>
