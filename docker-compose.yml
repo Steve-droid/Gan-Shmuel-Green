@@ -29,6 +29,7 @@ services:
     volumes:
       - ./resources/sample_files/sample_uploads:/app/in
     depends_on:
+      - weight
       - billing-db
     restart: unless-stopped
 
@@ -54,7 +55,6 @@ services:
       - ./resources/sample_files/sample_uploads:/app/in
     depends_on:
       - weight-db
-      - billing
     restart: unless-stopped
 
   weight-db:
