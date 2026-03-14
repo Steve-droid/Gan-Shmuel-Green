@@ -158,6 +158,23 @@ def run_pipeline(branch):
             capture_output=True, text=True
         )
 
+    # Step 4a-ii: Weight unit tests (run inside the weight test container which has all deps)
+    result = subprocess.run(
+        ['docker', 'exec', 'gan-shmuel-test-weight-1',
+         'python', '-m', 'pytest', 'tests/', '-v',
+         '--ignore=tests/test_e2e.py',
+         '--ignore=tests/test_db_functions_day2.py'],
+        capture_output=True, text=True
+    )
+
+    logging.info(f"Weight tests: {result.stdout.strip()}")
+
+    if result.returncode != 0:
+        logging.error(f"Weight tests failed:\nSTDOUT: {result.stdout.strip()}\nSTDERR: {result.stderr.strip()}")
+        send_email(f"[FAIL] Pipeline failed on {branch}", f"Weight tests failed:\n{result.stdout.strip()}", recipients)
+        cleanup_test_env()
+        return
+    
     # Step 4: Run tests
     # Step 4a-i: Billing unit tests (run inside the billing test container which has all deps)
     # billing/.dockerignore excludes tests/ and conftest.py from the image, so we copy them in first
@@ -181,30 +198,31 @@ def run_pipeline(branch):
         cleanup_test_env()
         return
 
-    # Step 4a-ii: Weight unit tests (run inside the weight test container which has all deps)
-    result = subprocess.run(
-        ['docker', 'exec', 'gan-shmuel-test-weight-1',
-         'python', '-m', 'pytest', 'tests/', '-v',
-         '--ignore=tests/test_e2e.py',
-         '--ignore=tests/test_db_functions_day2.py'],
-        capture_output=True, text=True
-    )
-
-    logging.info(f"Weight tests: {result.stdout.strip()}")
-
-    if result.returncode != 0:
-        logging.error(f"Weight tests failed:\nSTDOUT: {result.stdout.strip()}\nSTDERR: {result.stderr.strip()}")
-        send_email(f"[FAIL] Pipeline failed on {branch}", f"Weight tests failed:\n{result.stdout.strip()}", recipients)
-        cleanup_test_env()
-        return
     
     # Step 4b: Integration tests (DevOps)
+    #test health first.
     result = subprocess.run(
-        ['python', '-m', 'pytest', 'tests/', '-v'],
+        ['python', '-m', 'pytest', 'tests/health.py', '-v'],
         cwd=REPO_DIR, capture_output=True, text=True
     )
-
+    #test wegiht before billing.
+    result = subprocess.run(
+        ['python', '-m', 'pytest', 'tests/test_weight.py', '-v'],
+        cwd=REPO_DIR, capture_output=True, text=True
+    )
+    #test billing.
+    result = subprocess.run(
+        ['python', '-m', 'pytest', 'tests/test_billing.py', '-v'],
+        cwd=REPO_DIR, capture_output=True, text=True
+    )
+    #test e2e.
+    result = subprocess.run(
+        ['python', '-m', 'pytest', 'tests/test_e2e.py', '-v'],
+        cwd=REPO_DIR, capture_output=True, text=True
+    )
+    
     logging.info(f"Integration tests: {result.stdout.strip()}")
+    
     if result.returncode != 0:
         logging.error(f"Integration tests failed:\nSTDOUT: {result.stdout.strip()}\nSTDERR: {result.stderr.strip()}")
         send_email(f"[FAIL] Pipeline failed on {branch}", f"Integration tests failed:\n{result.stdout.strip()}", recipients)
